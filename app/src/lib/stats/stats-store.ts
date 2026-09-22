@@ -44,8 +44,6 @@ import { useExternalCredentialHelperKey } from '../trampoline/use-external-crede
 import { getUserAgent } from '../http'
 import { getHooksEnvEnabled } from '../hooks/config'
 import { enableNewStatsEndpoint } from '../feature-flag'
-import { parseModelKey } from '../copilot/byok'
-import { DefaultCopilotModel } from '../stores/copilot-store'
 
 type PullRequestReviewStatFieldInfix =
   | 'Approved'
@@ -257,9 +255,6 @@ const DefaultDailyMeasures: IDailyMeasures = {
   appliesClearAllChangesListFilterCount: 0,
   adjustedFiltersForHiddenChangesCount: 0,
   enterpriseAccountCount: 0,
-  generateCommitMessageButtonClickCount: 0,
-  generateCommitMessageCount: 0,
-  generateCommitMessageUsedVerbatimCount: 0,
   pushBlockedBySecretScanningCount: 0,
   secretsDetectedOnPushCount: 0,
   secretsDetectedOnPushBypassedCount: 0,
@@ -272,19 +267,6 @@ const DefaultDailyMeasures: IDailyMeasures = {
   worktreeCreatedCount: 0,
   worktreeDeletedCount: 0,
   worktreeMaxCount: 0,
-  initiateResolveConflictsWithCopilotCount: 0,
-  copilotConflictResolutionAcceptedCount: 0,
-  copilotConflictResolutionWithOverridesCount: 0,
-  copilotConflictResolutionSwitchToManualCount: 0,
-  copilotConflictResolutionStoppedCount: 0,
-  copilotConflictResolutionNoConflictStateCount: 0,
-  copilotConflictResolutionNoConflictedFilesCount: 0,
-  copilotConflictResolutionAllFilesSkippedCount: 0,
-  copilotConflictResolutionErrorCount: 0,
-  copilotConflictResolutionOver15sCount: 0,
-  copilotConflictResolutionOver30sCount: 0,
-  copilotConflictResolutionOver60sCount: 0,
-  copilotConflictResolutionOver120sCount: 0,
 }
 
 // A subtype of IDailyMeasures filtered to contain only its numeric properties
@@ -456,9 +438,6 @@ interface ICalculatedStats {
 
   /** Whether or not the user has the git hooks environment enabled */
   readonly gitHooksEnvEnabled: boolean
-
-  /** The resolved model ID for Copilot conflict resolution */
-  readonly copilotConflictResolutionModel: string
 }
 
 type DailyStats = ICalculatedStats &
@@ -550,7 +529,6 @@ export function buildStatsPayload(body: StatsPayload): ITelemetryPayload {
     useExternalCredentialHelper,
     filteringChangesEnabled,
     gitHooksEnvEnabled,
-    copilotConflictResolutionModel,
     active,
     tutorialStarted,
     tutorialRepoCreated,
@@ -587,7 +565,6 @@ export function buildStatsPayload(body: StatsPayload): ITelemetryPayload {
     useExternalCredentialHelper: useExternalCredentialHelper ?? null,
     filteringChangesEnabled,
     gitHooksEnvEnabled,
-    copilotConflictResolutionModel,
     active,
     tutorialStarted,
     tutorialRepoCreated,
@@ -851,38 +828,7 @@ export class StatsStore implements IStatsStore {
       useExternalCredentialHelper,
       filteringChangesEnabled,
       gitHooksEnvEnabled: getHooksEnvEnabled(),
-      copilotConflictResolutionModel:
-        this.getSelectedCopilotConflictResolutionModel(),
     }
-  }
-
-  /**
-   * Reads the user's selected Copilot conflict resolution model from
-   * localStorage and resolves it to the actual model ID string.
-   */
-  private getSelectedCopilotConflictResolutionModel(): string {
-    try {
-      const raw = localStorage.getItem('selected-copilot-models-by-account')
-      if (raw !== null) {
-        const parsed: unknown = JSON.parse(raw)
-        if (typeof parsed === 'object' && parsed !== null) {
-          for (const selections of Object.values(parsed)) {
-            if (typeof selections === 'object' && selections !== null) {
-              const selection = (selections as Record<string, unknown>)[
-                'conflict-resolution'
-              ]
-              if (typeof selection === 'string' && selection.length > 0) {
-                const key = parseModelKey(selection)
-                return key.modelId || DefaultCopilotModel
-              }
-            }
-          }
-        }
-      }
-    } catch {
-      // Fall through to default
-    }
-    return DefaultCopilotModel
   }
 
   private getOnboardingStats(): IOnboardingStats {

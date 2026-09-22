@@ -14,7 +14,6 @@ interface IPromptsPreferencesProps {
   readonly confirmForcePush: boolean
   readonly confirmUndoCommit: boolean
   readonly askForConfirmationOnCommitFilteredChanges: boolean
-  readonly confirmCommitMessageOverride: boolean
   readonly confirmWorktreeRemoval: boolean
   readonly showCommitLengthWarning: boolean
   readonly uncommittedChangesStrategy: UncommittedChangesStrategy
@@ -30,7 +29,6 @@ interface IPromptsPreferencesProps {
     value: UncommittedChangesStrategy
   ) => void
   readonly onAskForConfirmationOnCommitFilteredChanges: (value: boolean) => void
-  readonly onConfirmCommitMessageOverrideChanged: (checked: boolean) => void
   readonly onConfirmWorktreeRemovalChanged: (checked: boolean) => void
 }
 
@@ -43,7 +41,6 @@ interface IPromptsPreferencesState {
   readonly confirmForcePush: boolean
   readonly confirmUndoCommit: boolean
   readonly askForConfirmationOnCommitFilteredChanges: boolean
-  readonly confirmCommitMessageOverride: boolean
   readonly confirmWorktreeRemoval: boolean
   readonly uncommittedChangesStrategy: UncommittedChangesStrategy
 }
@@ -67,7 +64,6 @@ export class Prompts extends React.Component<
       uncommittedChangesStrategy: this.props.uncommittedChangesStrategy,
       askForConfirmationOnCommitFilteredChanges:
         this.props.askForConfirmationOnCommitFilteredChanges,
-      confirmCommitMessageOverride: this.props.confirmCommitMessageOverride,
       confirmWorktreeRemoval: this.props.confirmWorktreeRemoval,
     }
   }
@@ -133,15 +129,6 @@ export class Prompts extends React.Component<
 
     this.setState({ askForConfirmationOnCommitFilteredChanges: value })
     this.props.onAskForConfirmationOnCommitFilteredChanges(value)
-  }
-
-  private onConfirmCommitMessageOverrideChanged = (
-    event: React.FormEvent<HTMLInputElement>
-  ) => {
-    const value = event.currentTarget.checked
-
-    this.setState({ confirmCommitMessageOverride: value })
-    this.props.onConfirmCommitMessageOverrideChanged(value)
   }
 
   private onConfirmWorktreeRemovalChanged = (
@@ -300,15 +287,6 @@ export class Prompts extends React.Component<
                   : CheckboxValue.Off
               }
               onChange={this.onConfirmUndoCommitChanged}
-            />
-            <Checkbox
-              label="Overriding commit message with generated message"
-              value={
-                this.state.confirmCommitMessageOverride
-                  ? CheckboxValue.On
-                  : CheckboxValue.Off
-              }
-              onChange={this.onConfirmCommitMessageOverrideChanged}
             />
             <Checkbox
               label="Removing worktrees"

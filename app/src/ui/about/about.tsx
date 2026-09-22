@@ -296,11 +296,6 @@ export class About extends React.Component<IAboutProps> {
                 License and Open Source Notices
               </LinkButton>
             </p>
-            <p className="terms-and-license">
-              <LinkButton uri="https://gh.io/copilot-for-desktop-transparency">
-                Responsible use of Copilot in GitHub Desktop
-              </LinkButton>
-            </p>
           </div>
         </DialogContent>
         <DefaultDialogFooter />

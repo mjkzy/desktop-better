@@ -51,11 +51,6 @@ import {
 import { Shell } from '../../lib/shells'
 import { ILaunchStats, StatsStore } from '../../lib/stats'
 import { AppStore } from '../../lib/stores/app-store'
-import type {
-  CopilotFeature,
-  CopilotModelSelectionsByAccount,
-} from '../../lib/stores/copilot-store'
-import type { IBYOKProvider } from '../../lib/copilot/byok'
 import { RepositoryStateCache } from '../../lib/stores/repository-state-cache'
 import { getTipSha } from '../../lib/tip'
 
@@ -133,11 +128,6 @@ import { ICustomIntegration } from '../../lib/custom-integration'
 import { isAbsolute } from 'path'
 import { CLIAction } from '../../lib/cli-action'
 import { BypassReasonType } from '../secret-scanning/bypass-push-protection-dialog'
-import {
-  IConflictResolutionProgress,
-  IFileResolution,
-  ICopilotResolutionSummary,
-} from '../../lib/copilot-conflict-resolution'
 import { WorktreeEntry } from '../../models/worktree'
 
 /**
@@ -1173,87 +1163,6 @@ export class Dispatcher {
     message: ICommitMessage
   ): Promise<void> {
     return this.appStore._setCommitMessage(repository, message)
-  }
-
-  public promptOverrideWithGeneratedCommitMessage(
-    repository: Repository,
-    filesSelected: ReadonlyArray<WorkingDirectoryFileChange>
-  ) {
-    return this.appStore._promptOverrideWithGeneratedCommitMessage(
-      repository,
-      filesSelected
-    )
-  }
-
-  public updateCommitMessageGenerationDisclaimerLastSeen() {
-    return this.appStore._updateCommitMessageGenerationDisclaimerLastSeen()
-  }
-
-  public generateCommitMessage(
-    repository: Repository,
-    filesSelected: ReadonlyArray<WorkingDirectoryFileChange>
-  ) {
-    return this.appStore._generateCommitMessage(repository, filesSelected)
-  }
-
-  public cancelGenerateCommitMessage(repository: Repository) {
-    return this.appStore._cancelGenerateCommitMessage(repository)
-  }
-
-  /**
-   * Use Copilot to analyze and suggest resolutions for conflicts
-   * from merge, rebase, or cherry-pick operations.
-   */
-  public resolveConflictsWithCopilot(
-    repository: Repository,
-    onProgress?: (progress: IConflictResolutionProgress) => void
-  ): Promise<{
-    readonly resolutions: ReadonlyArray<IFileResolution>
-    readonly summary: ICopilotResolutionSummary
-  } | null> {
-    return this.appStore._resolveConflictsWithCopilot(repository, onProgress)
-  }
-
-  /**
-   * Start the full Copilot conflict resolution flow: call the API and
-   * transition to the result dialog.
-   */
-  public startCopilotConflictResolution(repository: Repository): Promise<void> {
-    return this.appStore._startCopilotConflictResolution(repository)
-  }
-
-  /**
-   * Cancel the in-flight Copilot conflict resolution, tearing down the
-   * underlying SDK turn immediately rather than letting it run to completion.
-   */
-  public abortCopilotConflictResolution(repository: Repository): void {
-    return this.appStore._abortCopilotConflictResolution(repository)
-  }
-
-  /**
-   * User-facing entry point invoked from the manual conflicts dialog's
-   * "Resolve with Copilot" button. Handles account-availability check,
-   * first-click tracking, and the AI-tool disclaimer popup before
-   * transitioning to the loading interstitial.
-   */
-  public attemptCopilotConflictResolution(
-    repository: Repository
-  ): Promise<void> {
-    return this.appStore._attemptCopilotConflictResolution(repository)
-  }
-
-  public updateCopilotConflictResolutionDisclaimerLastSeen() {
-    return this.appStore._updateCopilotConflictResolutionDisclaimerLastSeen()
-  }
-
-  /**
-   * Write Copilot-resolved file contents to disk and stage them.
-   * Called when the user confirms the resolutions from the result dialog.
-   */
-  public applyCopilotConflictResolutions(
-    repository: Repository
-  ): Promise<void> {
-    return this.appStore._applyCopilotConflictResolutions(repository)
   }
 
   /** Remove the given account from the app. */
@@ -2647,10 +2556,6 @@ export class Dispatcher {
     return this.appStore._setConfirmCommitFilteredChanges(value)
   }
 
-  public setConfirmCommitMessageOverrideSetting(value: boolean) {
-    return this.appStore._setConfirmCommitMessageOverrideSetting(value)
-  }
-
   public setConfirmWorktreeRemovalSetting(value: boolean) {
     return this.appStore._setConfirmWorktreeRemovalSetting(value)
   }
@@ -2685,6 +2590,11 @@ export class Dispatcher {
    */
   public setUICustomization(customization: IUICustomization) {
     return this.appStore._setUICustomization(customization)
+  }
+
+  /** Remove the toast with the given ID */
+  public dismissToast(id: string) {
+    return this.appStore._dismissToast(id)
   }
 
   /**
@@ -3943,22 +3853,6 @@ export class Dispatcher {
     return this.appStore._setMultiCommitOperationStep(repository, step)
   }
 
-  /**
-   * Atomically transition the multi commit operation step and set the
-   * useCopilotConflictResolution flag in a single store update.
-   */
-  public setMultiCommitOperationStepWithCopilotResolution(
-    repository: Repository,
-    step: MultiCommitOperationStep,
-    useCopilotConflictResolution: boolean
-  ): void {
-    this.appStore._setMultiCommitOperationStepWithCopilotResolution(
-      repository,
-      step,
-      useCopilotConflictResolution
-    )
-  }
-
   /** Method to clear multi commit operation state. */
   public endMultiCommitOperation(repository: Repository) {
     this.appStore._endMultiCommitOperation(repository)
@@ -4272,77 +4166,5 @@ export class Dispatcher {
 
   public toggleChangesFilterVisibility() {
     this.appStore._toggleChangesFilterVisibility()
-  }
-
-  /** Set the selected Copilot model for a specific feature. */
-  public setSelectedCopilotModel(
-    account: Account,
-    feature: CopilotFeature,
-    model: string | null
-  ) {
-    return this.appStore._setSelectedCopilotModel(account, feature, model)
-  }
-
-  /** Replace all account-scoped Copilot model selections at once. */
-  public setSelectedCopilotModelsByAccount(
-    modelsByAccount: CopilotModelSelectionsByAccount
-  ) {
-    return this.appStore._setSelectedCopilotModelsByAccount(modelsByAccount)
-  }
-
-  public setAlwaysUseCopilotForConflictResolution(value: boolean): void {
-    this.appStore._setAlwaysUseCopilotForConflictResolution(value)
-  }
-
-  /** Fetch the list of available Copilot models from the SDK. */
-  public fetchCopilotModels(): Promise<void> {
-    return this.appStore._fetchCopilotModels()
-  }
-
-  /** Fetch Copilot quota usage snapshots from the SDK. */
-  public fetchCopilotQuotaSnapshots(): Promise<void> {
-    return this.appStore._fetchCopilotQuotaSnapshots()
-  }
-
-  /**
-   * Add a new BYOK Copilot provider. The secret (API key / bearer token)
-   * is stored separately in the OS keychain.
-   */
-  public async addCopilotBYOKProvider(
-    provider: IBYOKProvider,
-    secret: string | null
-  ): Promise<void> {
-    try {
-      await this.appStore._addCopilotBYOKProvider(provider, secret)
-    } catch (e) {
-      log.error(`Error adding BYOK Copilot provider '${provider.name}'`, e)
-      this.postError(e)
-    }
-  }
-
-  /**
-   * Update a BYOK Copilot provider. Pass `secret = undefined` to leave the
-   * stored secret untouched, `null` to clear it, or a string to overwrite it.
-   */
-  public async updateCopilotBYOKProvider(
-    provider: IBYOKProvider,
-    secret: string | null | undefined
-  ): Promise<void> {
-    try {
-      await this.appStore._updateCopilotBYOKProvider(provider, secret)
-    } catch (e) {
-      log.error(`Error updating BYOK Copilot provider '${provider.name}'`, e)
-      this.postError(e)
-    }
-  }
-
-  /** Remove a BYOK Copilot provider and its stored secret. */
-  public async deleteCopilotBYOKProvider(id: string): Promise<void> {
-    try {
-      await this.appStore._deleteCopilotBYOKProvider(id)
-    } catch (e) {
-      log.error(`Error deleting BYOK Copilot provider '${id}'`, e)
-      this.postError(e)
-    }
   }
 }

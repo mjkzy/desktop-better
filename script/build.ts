@@ -54,7 +54,6 @@ import { updateLicenseDump } from './licenses/update-license-dump'
 import { verifyInjectedSassVariables } from './validate-sass/validate-all'
 import { join } from 'path'
 import assert from 'assert'
-import { copyCopilotDependency } from './copilot'
 
 const isPublishableBuild = isPublishable()
 const isDevelopmentBuild = getChannel() === 'development'
@@ -348,14 +347,6 @@ function copyDependencies() {
     path.resolve(trampolineSource, desktopAskpassTrampolineFile),
     path.resolve(desktopTrampolineDir, desktopAskpassTrampolineFile),
     { recursive: true, verbatimSymlinks: true }
-  )
-
-  console.log('  Copying copilot…')
-  copyCopilotDependency(
-    path.join(projectRoot, 'app', 'node_modules'),
-    path.join(outRoot, 'copilot'),
-    process.platform,
-    getDistArchitecture()
   )
 
   // Dev builds for macOS require a SSH wrapper to use SSH_ASKPASS

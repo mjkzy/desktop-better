@@ -149,10 +149,6 @@ export function buildTestMenu() {
           label: 'About dialog (test mode)',
           click: emit('test-about-dialog'),
         },
-        {
-          label: 'Copilot snapshot card',
-          click: emit('test-copilot-snapshot-card'),
-        },
       ],
     },
     {

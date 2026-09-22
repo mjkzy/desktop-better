@@ -1,16 +1,3 @@
-import type {
-  CopilotModelsByAccount,
-  CopilotModelSelectionsByAccount,
-  CopilotQuotaSnapshotsByAccount,
-} from './stores/copilot-store'
-import type { IBYOKProvider } from './copilot/byok'
-import type { IConflictResolutionModelDisplay } from './copilot/conflict-resolution-model'
-import type {
-  IFileResolution,
-  IConflictResolutionProgress,
-  ICopilotResolutionSummary,
-  ICopilotSkippedFile,
-} from './copilot-conflict-resolution'
 import { Account } from '../models/account'
 import { CommitIdentity } from '../models/commit-identity'
 import { IDiff, ImageDiffType } from '../models/diff'
@@ -70,6 +57,7 @@ import { ICustomIntegration } from './custom-integration'
 import { Emoji } from './emoji'
 import { IUpdateState } from '../ui/lib/update-store'
 import { IUICustomization } from '../models/ui-customization'
+import { IToast } from '../models/toast'
 
 export enum SelectionType {
   Repository,
@@ -258,8 +246,6 @@ export interface IAppState {
   /** Should the app prompt the user to confirm they want to commit with changes are hidden by filter? */
   readonly askForConfirmationOnCommitFilteredChanges: boolean
 
-  /** Should the app prompt the user to confirm commit message override? */
-  readonly askForConfirmationOnCommitMessageOverride: boolean
 
   /** Should the app prompt the user to confirm worktree removal? */
   readonly askForConfirmationOnWorktreeRemoval: boolean
@@ -323,6 +309,9 @@ export interface IAppState {
 
   /** The user-selected colors that override the colors of the theme */
   readonly uiCustomization: IUICustomization
+
+  /** The toasts in the bottom right corner of the window, oldest first */
+  readonly toasts: ReadonlyArray<IToast>
 
   /** The selected tab size preference */
   readonly selectedTabSize: number
@@ -412,33 +401,8 @@ export interface IAppState {
 
   readonly updateState: IUpdateState
 
-  readonly commitMessageGenerationDisclaimerLastSeen: number | null
-
-  readonly commitMessageGenerationButtonClicked: boolean
-
-  readonly copilotConflictResolutionDisclaimerLastSeen: number | null
-
-  readonly copilotConflictResolutionClickCount: number
-
-  readonly alwaysUseCopilotForConflictResolution: boolean
-
   /** Whether the changes filter is shown */
   readonly showChangesFilter: boolean
-
-  /** Account-scoped Copilot model selections. */
-  readonly selectedCopilotModelsByAccount: CopilotModelSelectionsByAccount
-
-  /** Account-scoped Copilot model lists, keyed by Copilot account cache key. */
-  readonly copilotModelsByAccount: CopilotModelsByAccount
-
-  /** Account-scoped Copilot quota snapshots, keyed by Copilot account cache key. */
-  readonly copilotQuotaSnapshotsByAccount: CopilotQuotaSnapshotsByAccount
-
-  /**
-   * The list of user-configured Copilot model providers (BYOK). Empty when
-   * the user has not configured any custom providers.
-   */
-  readonly byokProviders: ReadonlyArray<IBYOKProvider>
 }
 
 export enum FoldoutType {
@@ -599,12 +563,6 @@ export interface IRepositoryState {
 
   /** Is a commit in progress? */
   readonly isCommitting: boolean
-
-  /** Is generating a commit message? */
-  readonly isGeneratingCommitMessage: boolean
-
-  /** Controller used to cancel an in-flight commit message generation. */
-  readonly commitMessageGenerationAbortController: AbortController | null
 
   /** Commit being amended, or null if none. */
   readonly commitToAmend: Commit | null
@@ -1074,57 +1032,6 @@ export interface IMultiCommitOperationState {
    * operation, and therefore, should be warned on aborting the operation.
    */
   readonly userHasResolvedConflicts: boolean
-
-  /**
-   * Whether the user has opted into Copilot-powered conflict resolution for
-   * this operation. When true, subsequent conflict rounds will automatically
-   * route through ShowCopilotConflictsLoading instead of ShowConflicts.
-   */
-  readonly useCopilotConflictResolution: boolean
-
-  /**
-   * Resolutions returned by Copilot for the current conflict round. Null when
-   * Copilot hasn't been invoked or has not yet completed. Set after a
-   * successful resolution so the result dialog can display per-file reasoning.
-   */
-  readonly copilotResolutions: ReadonlyArray<IFileResolution> | null
-
-  /**
-   * Conflicted files Copilot did not resolve, with the reason each was skipped
-   * (too large, unreadable, no parseable markers, etc.). Null when Copilot
-   * hasn't been invoked or hasn't yet completed. Surfaced in the result dialog
-   * so the user can resolve these manually before continuing.
-   */
-  readonly copilotSkippedFiles: ReadonlyArray<ICopilotSkippedFile> | null
-
-  /**
-   * Progress of the in-flight Copilot conflict resolution request. Null when
-   * no resolution is in progress.
-   */
-  readonly copilotResolutionProgress: IConflictResolutionProgress | null
-
-  /**
-   * Bundled context for rendering the Copilot resolution summary card —
-   * the markdown produced by the model plus the real metadata Desktop uses
-   * to render the branch-flow header and the "For more context" links.
-   * Null when Copilot hasn't been invoked or has not yet completed.
-   */
-  readonly copilotResolutionSummary: ICopilotResolutionSummary | null
-
-  /**
-   * Controller used to cancel the in-flight Copilot conflict resolution. Set
-   * while a resolution is running so the loading dialog's "Stop" button can
-   * actually tear down the underlying SDK turn (rather than just navigating the
-   * UI away). Null when no resolution is in progress.
-   */
-  readonly copilotResolutionAbortController: AbortController | null
-
-  /**
-   * The model display captured at the time Copilot conflict resolution was
-   * started. Shown in the result dialog header so that changing the model
-   * setting mid-operation doesn't confuse the user.
-   */
-  readonly copilotResolutionModel: IConflictResolutionModelDisplay | null
 
   /**
    * The commit id of the tip of the branch user is modifying in the operation.

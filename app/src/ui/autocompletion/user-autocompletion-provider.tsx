@@ -8,9 +8,6 @@ import { IMentionableUser } from '../../lib/databases/index'
 import { Avatar } from '../lib/avatar'
 import { IAvatarUser } from '../../models/avatar'
 import memoizeOne from 'memoize-one'
-import { copilotSweAgentBot } from '../../models/dot-com-bots'
-import { getStealthEmailForUser } from '../../lib/email'
-import { isDotCom } from '../../lib/endpoint-capabilities'
 
 /** An autocompletion hit for a user. */
 export type KnownUserHit = {
@@ -179,20 +176,6 @@ export class UserAutocompletionProvider
   public async exactMatch(login: string): Promise<UserHit | null> {
     if (this.account === null) {
       return null
-    }
-
-    if (
-      login.toLowerCase() === 'copilot' &&
-      isDotCom(this.repository.endpoint)
-    ) {
-      const { userId, login, endpoint } = copilotSweAgentBot
-      return {
-        kind: 'known-user',
-        username: login,
-        name: login,
-        email: getStealthEmailForUser(userId, login, endpoint),
-        endpoint,
-      }
     }
 
     const user = await this.gitHubUserStore.getByLogin(this.account, login)

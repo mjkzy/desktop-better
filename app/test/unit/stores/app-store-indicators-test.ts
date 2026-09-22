@@ -23,9 +23,6 @@ describe('AppStore repository indicators', () => {
     })
     const { AppStore } = await import('../../../src/lib/stores/app-store')
     const { AliveStore } = await import('../../../src/lib/stores/alive-store')
-    const { CopilotStore } = await import(
-      '../../../src/lib/stores/copilot-store'
-    )
     const { NotificationsStore } = await import(
       '../../../src/lib/stores/notifications-store'
     )
@@ -75,8 +72,7 @@ describe('AppStore repository indicators', () => {
       pullRequestCoordinator,
       stores.repositoryStateCache,
       stores.apiRepositoriesStore,
-      notificationsStore,
-      new CopilotStore(stores.accountsStore)
+      notificationsStore
     )
   })
 
