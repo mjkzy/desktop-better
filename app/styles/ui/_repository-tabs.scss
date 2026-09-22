@@ -96,13 +96,14 @@
     }
 
     // As in VS Code, the close button shows a dot for a tab with uncommitted
-    // changes, and changes to a cross on hover.
+    // changes, and changes to a cross on hover. A count of the commits to push
+    // and pull replaces the dot.
     .repository-tab-close {
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      width: 20px;
+      min-width: 20px;
       height: 20px;
       padding: 0;
       border: none;
@@ -115,9 +116,25 @@
         height: 14px;
       }
 
-      .dirty {
+      .indicator {
         width: 10px;
         height: 10px;
+      }
+
+      .commit-count {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: auto;
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        border-radius: 8px;
+        background-color: var(--toolbar-text-color);
+        color: var(--toolbar-background-color);
+        font-size: 10px;
+        font-weight: var(--font-weight-semibold);
+        line-height: 1;
       }
 
       .close {
@@ -125,7 +142,7 @@
       }
     }
 
-    &.has-changes .repository-tab-close .close {
+    &.has-indicator .repository-tab-close .close {
       display: none;
     }
 
@@ -140,8 +157,8 @@
       }
     }
 
-    &.has-changes:hover {
-      button.repository-tab-close .dirty {
+    &.has-indicator:hover {
+      button.repository-tab-close .indicator {
         display: none;
       }
 

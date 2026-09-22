@@ -6,6 +6,20 @@ import { iconForRepository, Octicon } from '../octicons'
 import * as octicons from '../octicons/octicons.generated'
 import { IMenuItem, showContextualMenu } from '../../lib/menu-item'
 import { TooltippedContent } from '../lib/tooltipped-content'
+import { IAheadBehind } from '../../models/branch'
+
+const maxShownCommitCount = 99
+
+function describeAheadBehind({ ahead, behind }: IAheadBehind): string | null {
+  const parts = new Array<string>()
+  if (ahead > 0) {
+    parts.push(`${ahead} ${ahead === 1 ? 'commit' : 'commits'} to push`)
+  }
+  if (behind > 0) {
+    parts.push(`${behind} ${behind === 1 ? 'commit' : 'commits'} to pull`)
+  }
+  return parts.length > 0 ? parts.join(', ') : null
+}
 
 interface IRepositoryTabItemProps {
   readonly tab: IRepositoryTab
@@ -13,6 +27,7 @@ interface IRepositoryTabItemProps {
   readonly isSelected: boolean
   readonly isDragged: boolean
   readonly hasChanges: boolean
+  readonly aheadBehind: IAheadBehind | null
   readonly canClose: boolean
   readonly onSelect: (repository: Repository) => void
   readonly onSelectAdjacent: (direction: 1 | -1) => void
@@ -50,9 +65,11 @@ class RepositoryTabItem extends React.Component<IRepositoryTabItemProps> {
   }
 
   public render() {
-    const { tab, isSelected, isDragged, hasChanges } = this.props
+    const { tab, isSelected, isDragged, hasChanges, aheadBehind } = this.props
     const { repository, branchName } = tab
     const name = repository.alias ?? repository.name
+    const commitSummary =
+      aheadBehind === null ? null : describeAheadBehind(aheadBehind)
 
     return (
       <div
@@ -63,7 +80,7 @@ class RepositoryTabItem extends React.Component<IRepositoryTabItemProps> {
         className={classNames('repository-tab', {
           selected: isSelected,
           dragging: isDragged,
-          'has-changes': hasChanges,
+          'has-indicator': hasChanges || this.commitCount > 0,
         })}
         draggable={true}
         onClick={this.onClick}
@@ -81,7 +98,12 @@ class RepositoryTabItem extends React.Component<IRepositoryTabItemProps> {
         />
         <TooltippedContent
           className="repository-tab-label"
-          tooltip={repository.path}
+          tooltip={
+            commitSummary === null
+              ? repository.path
+              : `${repository.path}
+${commitSummary}`
+          }
           tagName="div"
         >
           <div className="repository-tab-name">{name}</div>
@@ -94,15 +116,32 @@ class RepositoryTabItem extends React.Component<IRepositoryTabItemProps> {
     )
   }
 
-  private renderCloseButton(name: string) {
-    const { canClose, hasChanges } = this.props
+  private get commitCount() {
+    const { aheadBehind } = this.props
+    return aheadBehind === null ? 0 : aheadBehind.ahead + aheadBehind.behind
+  }
 
-    if (!canClose) {
-      return hasChanges ? (
-        <span className="repository-tab-close">
-          <Octicon className="dirty" symbol={octicons.dotFill} />
+  private renderIndicator() {
+    const count = this.commitCount
+    if (count > 0) {
+      return (
+        <span className="indicator commit-count">
+          {count > maxShownCommitCount ? `${maxShownCommitCount}+` : count}
         </span>
-      ) : null
+      )
+    }
+
+    return this.props.hasChanges ? (
+      <Octicon className="indicator" symbol={octicons.dotFill} />
+    ) : null
+  }
+
+  private renderCloseButton(name: string) {
+    if (!this.props.canClose) {
+      const indicator = this.renderIndicator()
+      return indicator === null ? null : (
+        <span className="repository-tab-close">{indicator}</span>
+      )
     }
 
     return (
@@ -112,7 +151,7 @@ class RepositoryTabItem extends React.Component<IRepositoryTabItemProps> {
         tabIndex={-1}
         onClick={this.onCloseClick}
       >
-        {hasChanges && <Octicon className="dirty" symbol={octicons.dotFill} />}
+        {this.renderIndicator()}
         <Octicon className="close" symbol={octicons.x} />
       </button>
     )
@@ -222,6 +261,10 @@ export class RepositoryTabs extends React.Component<
               hasChanges={
                 (localRepositoryStateLookup.get(tab.repository.id)
                   ?.changedFilesCount ?? 0) > 0
+              }
+              aheadBehind={
+                localRepositoryStateLookup.get(tab.repository.id)
+                  ?.aheadBehind ?? null
               }
               canClose={tabs.length > 1}
               onSelect={this.props.onSelect}
