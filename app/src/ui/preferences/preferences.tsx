@@ -70,6 +70,8 @@ import {
   setNumberFormatPreference,
 } from '../../models/formatting-preferences'
 import { enableFormattingPreferences } from '../../lib/feature-flag'
+import { IUICustomization } from '../../models/ui-customization'
+import { applyUICustomization } from '../lib/apply-ui-customization'
 
 interface IPreferencesProps {
   readonly dispatcher: Dispatcher
@@ -96,6 +98,7 @@ interface IPreferencesProps {
   readonly selectedShell: Shell
   readonly selectedTheme: ApplicationTheme
   readonly selectedTabSize: number
+  readonly uiCustomization: IUICustomization
   readonly alwaysShowWorktreeList: boolean
   readonly useCustomEditor: boolean
   readonly customEditor: ICustomIntegration | null
@@ -152,6 +155,7 @@ interface IPreferencesState {
 
   readonly initiallySelectedTheme: ApplicationTheme
   readonly initiallySelectedTabSize: number
+  readonly uiCustomization: IUICustomization
   readonly alwaysShowWorktreeList: boolean
 
   readonly isLoadingGitConfig: boolean
@@ -226,6 +230,7 @@ export class Preferences extends React.Component<
       repositoryIndicatorsEnabled: this.props.repositoryIndicatorsEnabled,
       initiallySelectedTheme: this.props.selectedTheme,
       initiallySelectedTabSize: this.props.selectedTabSize,
+      uiCustomization: this.props.uiCustomization,
       alwaysShowWorktreeList: this.props.alwaysShowWorktreeList,
       isLoadingGitConfig: true,
       underlineLinks: this.props.underlineLinks,
@@ -307,6 +312,11 @@ export class Preferences extends React.Component<
       customShell: this.props.customShell ?? DefaultCustomIntegration,
       isLoadingGitConfig: false,
     })
+  }
+
+  public componentWillUnmount() {
+    // Remove the unsaved preview. After a save, the app applies the new colors.
+    applyUICustomization(this.props.uiCustomization)
   }
 
   private onCancel = () => {
@@ -537,6 +547,8 @@ export class Preferences extends React.Component<
             onSelectedThemeChanged={this.onSelectedThemeChanged}
             selectedTabSize={this.props.selectedTabSize}
             onSelectedTabSizeChanged={this.onSelectedTabSizeChanged}
+            uiCustomization={this.state.uiCustomization}
+            onUICustomizationChanged={this.onUICustomizationChanged}
             alwaysShowWorktreeList={this.state.alwaysShowWorktreeList}
             onAlwaysShowWorktreeListChanged={
               this.onAlwaysShowWorktreeListChanged
@@ -810,6 +822,11 @@ export class Preferences extends React.Component<
     this.props.dispatcher.setSelectedTabSize(tabSize)
   }
 
+  private onUICustomizationChanged = (uiCustomization: IUICustomization) => {
+    this.setState({ uiCustomization })
+    applyUICustomization(uiCustomization)
+  }
+
   private onAlwaysShowWorktreeListChanged = (
     alwaysShowWorktreeList: boolean
   ) => {
@@ -831,6 +848,10 @@ export class Preferences extends React.Component<
 
   private onSave = async () => {
     const { dispatcher } = this.props
+
+    if (this.state.uiCustomization !== this.props.uiCustomization) {
+      dispatcher.setUICustomization(this.state.uiCustomization)
+    }
 
     try {
       let shouldRefreshAuthor = false

@@ -1,9 +1,6 @@
 import * as React from 'react'
 import { readFile, writeFile } from 'fs/promises'
-import { Dialog, DialogContent, DialogError, DialogFooter } from '../dialog'
-import { OkCancelButtonGroup } from '../dialog/ok-cancel-button-group'
 import { Button } from '../lib/button'
-import { Dispatcher } from '../dispatcher'
 import {
   IUICustomization,
   defaultUICustomization,
@@ -16,6 +13,7 @@ import {
   serializeUICustomization,
 } from '../../lib/ui-customization'
 import { showOpenDialog, showSaveDialog } from '../main-process-proxy'
+import { ApplicationTheme } from '../lib/application-theme'
 
 const themeFileFilters = [{ name: 'Theme file', extensions: ['json'] }]
 
@@ -70,41 +68,41 @@ function toHexColor(value: string): string {
   return '#000000'
 }
 
-interface ICustomizeDialogProps {
-  readonly dispatcher: Dispatcher
+interface ICustomColorsProps {
   readonly customization: IUICustomization
-  readonly onDismissed: () => void
+  readonly onCustomizationChanged: (customization: IUICustomization) => void
+  /** The theme colors are the defaults, so they change with the theme */
+  readonly selectedTheme: ApplicationTheme
 }
 
-interface ICustomizeDialogState {
-  readonly customization: IUICustomization
+interface ICustomColorsState {
   readonly themeColors: Readonly<Record<CustomizableColor, string>>
   readonly error: string | null
 }
 
-interface ICustomizeColorOptionProps {
+interface ICustomColorOptionProps {
   readonly option: ICustomizableColorOption
   readonly value: string | null
   readonly themeColor: string
   readonly onChange: (key: CustomizableColor, value: string | null) => void
 }
 
-class CustomizeColorOption extends React.Component<ICustomizeColorOptionProps> {
+class CustomColorOption extends React.Component<ICustomColorOptionProps> {
   public render() {
     const { option, value, themeColor } = this.props
-    const inputId = `customize-${option.key}`
+    const inputId = `custom-color-${option.key}`
 
     return (
-      <div className="customize-color-option">
+      <div className="custom-color-option">
         <input
           id={inputId}
           type="color"
           value={value ?? themeColor}
           onChange={this.onColorChange}
         />
-        <div className="customize-color-label">
+        <div className="custom-color-label">
           <label htmlFor={inputId}>{option.label}</label>
-          <span className="customize-color-description">
+          <span className="custom-color-description">
             {option.description}
             {value === null ? ' Theme default.' : null}
           </span>
@@ -133,64 +131,59 @@ class CustomizeColorOption extends React.Component<ICustomizeColorOptionProps> {
   }
 }
 
-/** A dialog that changes the colors of the application with a live preview */
-export class CustomizeDialog extends React.Component<
-  ICustomizeDialogProps,
-  ICustomizeDialogState
+/** The color settings of the application, with a live preview */
+export class CustomColors extends React.Component<
+  ICustomColorsProps,
+  ICustomColorsState
 > {
-  public constructor(props: ICustomizeDialogProps) {
+  public constructor(props: ICustomColorsProps) {
     super(props)
 
     this.state = {
-      customization: props.customization,
       themeColors: this.readThemeColors(),
       error: null,
     }
   }
 
+  public componentDidUpdate(prevProps: ICustomColorsProps) {
+    if (prevProps.selectedTheme !== this.props.selectedTheme) {
+      this.setState({ themeColors: this.readThemeColors() })
+    }
+  }
+
   public render() {
     return (
-      <Dialog
-        id="customize"
-        title={__DARWIN__ ? 'Customize Colors' : 'Customize colors'}
-        onDismissed={this.onCancel}
-        onSubmit={this.onSave}
-      >
+      <div className="appearance-section custom-colors">
+        <h2 id="colors-heading">Colors</h2>
+        <p className="custom-colors-description">
+          Changes apply at once. Select Save to keep them.
+        </p>
+        {colorOptions.map(this.renderColorOption)}
         {this.state.error !== null ? (
-          <DialogError>{this.state.error}</DialogError>
-        ) : null}
-        <DialogContent>
-          <p className="customize-description">
-            Changes apply at once. Select Save to keep them.
+          <p className="custom-colors-error" role="alert">
+            {this.state.error}
           </p>
-          {colorOptions.map(this.renderColorOption)}
-          <div className="customize-theme-file">
-            <Button onClick={this.onImport}>
-              {__DARWIN__ ? 'Import Theme…' : 'Import theme…'}
-            </Button>
-            <Button onClick={this.onExport}>
-              {__DARWIN__ ? 'Export Theme…' : 'Export theme…'}
-            </Button>
-          </div>
-        </DialogContent>
-        <DialogFooter>
-          <Button className="reset-all-button" onClick={this.onResetAll}>
-            {__DARWIN__ ? 'Reset All' : 'Reset all'}
+        ) : null}
+        <div className="custom-colors-actions">
+          <Button onClick={this.onImport}>
+            {__DARWIN__ ? 'Import Theme…' : 'Import theme…'}
           </Button>
-          <OkCancelButtonGroup
-            okButtonText="Save"
-            onCancelButtonClick={this.onCancel}
-          />
-        </DialogFooter>
-      </Dialog>
+          <Button onClick={this.onExport}>
+            {__DARWIN__ ? 'Export Theme…' : 'Export theme…'}
+          </Button>
+          <Button className="reset-all-button" onClick={this.onResetAll}>
+            {__DARWIN__ ? 'Reset All Colors' : 'Reset all colors'}
+          </Button>
+        </div>
+      </div>
     )
   }
 
   private renderColorOption = (option: ICustomizableColorOption) => (
-    <CustomizeColorOption
+    <CustomColorOption
       key={option.key}
       option={option}
-      value={this.state.customization[option.key]}
+      value={this.props.customization[option.key]}
       themeColor={this.state.themeColors[option.key]}
       onChange={this.updateColor}
     />
@@ -213,12 +206,12 @@ export class CustomizeDialog extends React.Component<
   }
 
   private preview(customization: IUICustomization) {
-    this.setState({ customization, error: null })
-    applyUICustomization(customization)
+    this.setState({ error: null })
+    this.props.onCustomizationChanged(customization)
   }
 
   private updateColor = (key: CustomizableColor, value: string | null) => {
-    this.preview({ ...this.state.customization, [key]: value })
+    this.preview({ ...this.props.customization, [key]: value })
   }
 
   private onResetAll = () => {
@@ -258,19 +251,9 @@ export class CustomizeDialog extends React.Component<
     }
 
     try {
-      await writeFile(path, serializeUICustomization(this.state.customization))
+      await writeFile(path, serializeUICustomization(this.props.customization))
     } catch (e) {
       this.setState({ error: `Unable to write the theme file: ${e}` })
     }
-  }
-
-  private onSave = () => {
-    this.props.dispatcher.setUICustomization(this.state.customization)
-    this.props.onDismissed()
-  }
-
-  private onCancel = () => {
-    applyUICustomization(this.props.customization)
-    this.props.onDismissed()
   }
 }

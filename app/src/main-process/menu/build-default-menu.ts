@@ -263,11 +263,6 @@ export function buildDefaultMenuTemplate({
       },
       separator,
       {
-        label: __DARWIN__ ? 'Customize…' : 'C&ustomize…',
-        click: emit('show-customize'),
-      },
-      separator,
-      {
         label: __DARWIN__ ? 'Reset Zoom' : 'Reset zoom',
         accelerator: 'CmdOrCtrl+0',
         click: zoom(ZoomDirection.Reset),

@@ -71,6 +71,63 @@
     margin-top: var(--spacing);
   }
 
+  .custom-colors {
+    margin-top: var(--spacing);
+
+    .custom-colors-description {
+      margin-top: 0;
+      color: var(--text-secondary-color);
+    }
+
+    .custom-color-option {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing);
+      padding: var(--spacing-half) 0;
+
+      input[type='color'] {
+        flex-shrink: 0;
+        width: 36px;
+        height: 28px;
+        padding: 0;
+        border: var(--base-border);
+        border-radius: var(--border-radius);
+        background: none;
+        cursor: pointer;
+      }
+
+      .custom-color-label {
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+        min-width: 0;
+
+        label {
+          font-weight: var(--font-weight-semibold);
+        }
+      }
+
+      .custom-color-description {
+        color: var(--text-secondary-color);
+        font-size: var(--font-size-sm);
+      }
+    }
+
+    .custom-colors-error {
+      color: var(--error-color);
+    }
+
+    .custom-colors-actions {
+      display: flex;
+      gap: var(--spacing-half);
+      margin-top: var(--spacing);
+
+      .reset-all-button {
+        margin-left: auto;
+      }
+    }
+  }
+
   .accounts-tab {
     .account-info {
       .user-info-container {

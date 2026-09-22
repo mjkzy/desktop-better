@@ -9,6 +9,7 @@ import {
   getTimeFormatPreference,
   getNumberFormatPreference,
 } from '../../../src/models/formatting-preferences'
+import { defaultUICustomization } from '../../../src/models/ui-customization'
 
 function renderAppearance(alwaysShowWorktreeList = false) {
   const changes: boolean[] = []
@@ -17,6 +18,8 @@ function renderAppearance(alwaysShowWorktreeList = false) {
     onSelectedThemeChanged: () => {},
     selectedTabSize: 4,
     onSelectedTabSizeChanged: () => {},
+    uiCustomization: defaultUICustomization,
+    onUICustomizationChanged: () => {},
     selectedDateFormat: getDateFormatPreference(),
     onSelectedDateFormatChanged: () => {},
     selectedTimeFormat: getTimeFormatPreference(),

@@ -41,7 +41,6 @@ export enum PopupType {
   CreateBranch = 'CreateBranch',
   SignIn = 'SignIn',
   About = 'About',
-  Customize = 'Customize',
   InstallGit = 'InstallGit',
   PublishRepository = 'PublishRepository',
   Acknowledgements = 'Acknowledgements',
@@ -172,7 +171,6 @@ export type PopupDetail =
       credentialHelperUrl?: string
     }
   | { type: PopupType.About }
-  | { type: PopupType.Customize }
   | { type: PopupType.InstallGit; path: string }
   | { type: PopupType.PublishRepository; repository: Repository }
   | { type: PopupType.Acknowledgements }

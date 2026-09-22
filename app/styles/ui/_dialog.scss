@@ -8,7 +8,6 @@
 @import 'dialogs/release-notes';
 @import 'dialogs/usage-reporting';
 @import 'dialogs/stash-changes';
-@import 'dialogs/customize';
 @import 'dialogs/commit-conflicts-warning';
 @import 'dialogs/create-tutorial-repository';
 @import 'dialogs/create-fork';
@@ -547,6 +546,11 @@ dialog {
       &.accounts-tab {
         max-height: $default-tab-height;
         overflow: auto;
+      }
+
+      &.appearance-tab {
+        max-height: calc(100vh - 150px);
+        overflow-y: auto;
       }
     }
   }

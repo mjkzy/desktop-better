@@ -22,12 +22,16 @@ import {
   numberFormatToKey,
 } from '../../models/formatting-preferences'
 import { formatNumber } from '../../lib/format-number'
+import { IUICustomization } from '../../models/ui-customization'
+import { CustomColors } from './custom-colors'
 
 interface IAppearanceProps {
   readonly selectedTheme: ApplicationTheme
   readonly onSelectedThemeChanged: (theme: ApplicationTheme) => void
   readonly selectedTabSize: number
   readonly onSelectedTabSizeChanged: (tabSize: number) => void
+  readonly uiCustomization: IUICustomization
+  readonly onUICustomizationChanged: (customization: IUICustomization) => void
   readonly alwaysShowWorktreeList: boolean
   readonly onAlwaysShowWorktreeListChanged: (value: boolean) => void
   readonly selectedDateFormat: DateFormat
@@ -304,8 +308,13 @@ export class Appearance extends React.Component<
 
   public render() {
     return (
-      <DialogContent>
+      <DialogContent className="appearance-tab">
         {this.renderSelectedTheme()}
+        <CustomColors
+          customization={this.props.uiCustomization}
+          onCustomizationChanged={this.props.onUICustomizationChanged}
+          selectedTheme={this.props.selectedTheme}
+        />
         {this.renderFormatting()}
         {this.renderMiscellaneous()}
       </DialogContent>

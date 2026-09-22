@@ -101,7 +101,6 @@ import { AppTheme } from './app-theme'
 import { AppUICustomization } from './app-ui-customization'
 import { ToastStack } from './toasts/toast-stack'
 import { RepositoryTabs } from './repository-tabs/repository-tabs'
-import { CustomizeDialog } from './customize/customize-dialog'
 import { defaultUICustomization } from '../models/ui-customization'
 import { ApplicationTheme } from './lib/application-theme'
 import { RepositoryStateCache } from '../lib/stores/repository-state-cache'
@@ -508,8 +507,6 @@ export class App extends React.Component<IAppProps, IAppState> {
         return this.showCloneRepo()
       case 'show-about':
         return this.showAbout()
-      case 'show-customize':
-        return this.props.dispatcher.showPopup({ type: PopupType.Customize })
       case 'select-next-repository-tab':
         return this.props.dispatcher.selectAdjacentRepositoryTab(1)
       case 'select-previous-repository-tab':
@@ -1686,6 +1683,7 @@ export class App extends React.Component<IAppProps, IAppState> {
             selectedShell={this.state.selectedShell}
             selectedTheme={this.state.selectedTheme}
             selectedTabSize={this.state.selectedTabSize}
+            uiCustomization={this.state.uiCustomization}
             useCustomEditor={this.state.useCustomEditor}
             customEditor={this.state.customEditor}
             useCustomShell={this.state.useCustomShell}
@@ -1823,15 +1821,6 @@ export class App extends React.Component<IAppProps, IAppState> {
             onShowTermsAndConditions={this.showTermsAndConditions}
             updateState={this.state.updateState}
             onQuitAndInstall={this.onQuitAndInstall}
-          />
-        )
-      case PopupType.Customize:
-        return (
-          <CustomizeDialog
-            key="customize"
-            dispatcher={this.props.dispatcher}
-            customization={this.state.uiCustomization}
-            onDismissed={onPopupDismissedFn}
           />
         )
       case PopupType.PublishRepository:
