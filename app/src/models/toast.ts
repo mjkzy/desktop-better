@@ -12,5 +12,9 @@ export interface IToast {
   /** A toast with the same ID replaces this toast */
   readonly id: string
   readonly kind: ToastKind
+
+  /** The name of the repository, for a toast about a background tab */
+  readonly title?: string
+
   readonly message: string
 }

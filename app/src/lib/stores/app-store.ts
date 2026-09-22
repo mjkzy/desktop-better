@@ -208,6 +208,7 @@ import {
   TerminalOutput,
   HookProgress,
   getAheadBehind,
+  getCurrentUpstreamSha,
   revSymmetricDifference,
 } from '../git'
 import {
@@ -566,6 +567,15 @@ export class AppStore extends TypedBaseStore<IAppState> {
   private readonly staleRepositoryIds = new Set<number>()
   private readonly lastRefreshTimes = new Map<number, number>()
   private readonly backgroundTabStatusTimers = new Map<number, number>()
+  private readonly backgroundTabSnapshots = new Map<
+    number,
+    IRepositorySnapshot
+  >()
+  /** The snapshot before the first change that a visible toast reports */
+  private readonly backgroundToastBaselines = new Map<
+    string,
+    IRepositorySnapshot
+  >()
   private toasts: ReadonlyArray<IToast> = []
   private readonly toastTimers = new Map<string, number>()
   private readonly networkToastOperations = new Map<
@@ -1999,6 +2009,16 @@ export class AppStore extends TypedBaseStore<IAppState> {
       this.currentOnboardingTutorialStep = TutorialStep.NotApplicable
     }
 
+    if (
+      previouslySelectedRepository instanceof Repository &&
+      previouslySelectedRepository.id !== this.getRepositoryId(repository)
+    ) {
+      this.backgroundTabSnapshots.set(
+        previouslySelectedRepository.id,
+        this.getRepositorySnapshot(previouslySelectedRepository)
+      )
+    }
+
     this.selectedRepository = repository
 
     this.emitUpdate()
@@ -2215,6 +2235,10 @@ export class AppStore extends TypedBaseStore<IAppState> {
           path: repository.path,
           watcher: this.startRepositoryWatcher(repository),
         })
+
+        if (id !== selected?.id) {
+          this.updateBackgroundTabSnapshot(repository)
+        }
       }
     }
   }
@@ -2235,7 +2259,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
     )
   }
 
-  private onBackgroundRepositoryWatchChanges(
+  private async onBackgroundRepositoryWatchChanges(
     repositoryId: number,
     changes: IRepositoryWatchChanges
   ) {
@@ -2245,6 +2269,10 @@ export class AppStore extends TypedBaseStore<IAppState> {
     }
 
     this.staleRepositoryIds.add(repositoryId)
+
+    if (changes.refs) {
+      await this.reportBackgroundTabChange(repositoryId)
+    }
 
     if (this.backgroundTabStatusTimers.has(repositoryId)) {
       return
@@ -2263,6 +2291,80 @@ export class AppStore extends TypedBaseStore<IAppState> {
     this.backgroundTabStatusTimers.set(repositoryId, timer)
   }
 
+  /**
+   * Show a toast when a commit, pull, push or fetch changes the branch of a
+   * tab that the user does not look at.
+   */
+  private async reportBackgroundTabChange(repositoryId: number) {
+    const repository = this.findRepositoryById(repositoryId)
+    if (repository === null) {
+      return
+    }
+
+    const toastId = `external-change-${repositoryId}`
+    const before =
+      this.backgroundToastBaselines.get(toastId) ??
+      this.backgroundTabSnapshots.get(repositoryId)
+    const after = await this.updateBackgroundTabSnapshot(repository)
+
+    // The network toast already reports a push, pull or fetch that Desktop
+    // runs.
+    if (
+      before === undefined ||
+      after === null ||
+      repositoryId === this.getSelectedRepositoryId() ||
+      this.repositoryStateCache.get(repository).isPushPullFetchInProgress
+    ) {
+      return
+    }
+
+    const message = describeRepositoryChange(
+      before,
+      after,
+      await this.countNewCommits(repository, before.tipSha, after.tipSha)
+    )
+
+    if (message !== null) {
+      this.backgroundToastBaselines.set(toastId, before)
+      this.showToast({
+        id: toastId,
+        kind: 'info',
+        title: repository.alias ?? repository.name,
+        message,
+      })
+    }
+  }
+
+  private async updateBackgroundTabSnapshot(
+    repository: Repository
+  ): Promise<IRepositorySnapshot | null> {
+    const status = await this.gitStoreCache.get(repository).loadStatus()
+    if (status === null) {
+      return null
+    }
+
+    this.updateSidebarIndicator(repository, status)
+    this.emitUpdate()
+
+    const upstreamName = status.currentUpstreamBranch ?? null
+    const upstreamSha =
+      upstreamName === null
+        ? null
+        : await getCurrentUpstreamSha(repository.path).catch(() => null)
+
+    const snapshot: IRepositorySnapshot = {
+      branchName: status.currentBranch ?? null,
+      tipSha: status.currentTip ?? null,
+      upstreamName,
+      upstreamSha,
+      ahead: status.branchAheadBehind?.ahead ?? 0,
+      behind: status.branchAheadBehind?.behind ?? 0,
+    }
+    this.backgroundTabSnapshots.set(repository.id, snapshot)
+
+    return snapshot
+  }
+
   private async refreshBackgroundTabStatus(repository: Repository) {
     const status = await this.gitStoreCache.get(repository).loadStatus()
     this.updateSidebarIndicator(repository, status)
@@ -2275,8 +2377,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
   ) {
     const repository = this.selectedRepository
     if (!(repository instanceof Repository) || repository.id !== repositoryId) {
-      this.onBackgroundRepositoryWatchChanges(repositoryId, changes)
-      return
+      return this.onBackgroundRepositoryWatchChanges(repositoryId, changes)
     }
 
     const state = this.repositoryStateCache.get(repository)
@@ -2440,6 +2541,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
   }
 
   private dismissToast(id: string) {
+    this.backgroundToastBaselines.delete(id)
     const timer = this.toastTimers.get(id)
     if (timer !== undefined) {
       window.clearTimeout(timer)
@@ -2525,9 +2627,11 @@ export class AppStore extends TypedBaseStore<IAppState> {
   }
 
   private getSelectedRepositoryId() {
-    return this.selectedRepository instanceof Repository
-      ? this.selectedRepository.id
-      : null
+    return this.getRepositoryId(this.selectedRepository)
+  }
+
+  private getRepositoryId(repository: Repository | CloningRepository | null) {
+    return repository instanceof Repository ? repository.id : null
   }
 
   /** This shouldn't be called directly. See `Dispatcher`. */

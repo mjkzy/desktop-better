@@ -12,12 +12,15 @@ interface IToastItemProps {
 
 class ToastItem extends React.Component<IToastItemProps> {
   public render() {
-    const { kind, message } = this.props.toast
+    const { kind, title, message } = this.props.toast
 
     return (
       <div className={classNames('toast', kind)}>
         {this.renderIcon()}
-        <span className="toast-message">{message}</span>
+        <span className="toast-message">
+          {title !== undefined && <span className="toast-title">{title}</span>}
+          {message}
+        </span>
         <button
           className="toast-dismiss"
           aria-label="Dismiss"

@@ -108,6 +108,15 @@ export async function getUpstreamRemoteNameForRef(path: string, ref?: string) {
   return remoteRef?.match(/^refs\/remotes\/([^/]+)\//)?.[1] ?? null
 }
 
+/** Get the SHA of the upstream of the current branch, or `null` if none */
+export async function getCurrentUpstreamSha(path: string) {
+  const args = ['rev-parse', '--verify', '--quiet', '@{upstream}']
+  const opts = { successExitCodes: new Set([0, 1, 128]) }
+  const result = await git(args, path, 'getCurrentUpstreamSha', opts)
+
+  return result.exitCode === 0 ? result.stdout.trim() : null
+}
+
 export const getCurrentUpstreamRef = (path: string) =>
   getUpstreamRefForRef(path)
 

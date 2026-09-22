@@ -44,6 +44,11 @@
       overflow-wrap: anywhere;
     }
 
+    .toast-title {
+      display: block;
+      font-weight: var(--font-weight-semibold);
+    }
+
     .toast-dismiss {
       flex-shrink: 0;
       display: flex;
