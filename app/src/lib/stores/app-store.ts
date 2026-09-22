@@ -405,6 +405,12 @@ const backgroundTabStatusDelayMs = 10 * 1000
 
 /** Wait this long after startup before the app loads the background tabs */
 const prewarmRepositoryTabsDelayMs = 5 * 1000
+
+/**
+ * A tab switch skips the GitHub API requests and the immediate fetch for a
+ * repository that the app selected less than this time ago.
+ */
+const selectRemoteRefreshIntervalMs = 10 * 60 * 1000
 /**
  *  maximum number of repositories shown in the "Recent" repositories group
  *  in the repository switcher dropdown
@@ -566,6 +572,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
   >()
   private readonly staleRepositoryIds = new Set<number>()
   private readonly lastRefreshTimes = new Map<number, number>()
+  private readonly lastSelectRemoteRefreshTimes = new Map<number, number>()
   private readonly backgroundTabStatusTimers = new Map<number, number>()
   private readonly backgroundTabSnapshots = new Map<
     number,
@@ -2060,7 +2067,10 @@ export class AppStore extends TypedBaseStore<IAppState> {
     // This is now purely for metrics collection for `commitsToRepositoryWithBranchProtections`
     // Understanding how many users actually contribute to repos with branch protections gives us
     // insight into who our users are and what kinds of work they do
-    this.updateBranchProtectionsFromAPI(repository)
+    const isRemoteRefreshDue = this.isSelectRemoteRefreshDue(repository)
+    if (isRemoteRefreshDue) {
+      this.updateBranchProtectionsFromAPI(repository)
+    }
 
     this.notificationsStore.selectRepository(repository)
 
@@ -2068,8 +2078,26 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
     return this._selectRepositoryRefreshTasks(
       refreshedRepository,
-      previouslySelectedRepository
+      previouslySelectedRepository,
+      isRemoteRefreshDue
     )
+  }
+
+  /**
+   * Check if a selection of the repository must load its GitHub data and
+   * fetch. A switch back to a recent tab uses the cached data.
+   */
+  private isSelectRemoteRefreshDue(repository: Repository) {
+    const lastRefresh = this.lastSelectRemoteRefreshTimes.get(repository.id)
+    if (
+      lastRefresh !== undefined &&
+      Date.now() - lastRefresh < selectRemoteRefreshIntervalMs
+    ) {
+      return false
+    }
+
+    this.lastSelectRemoteRefreshTimes.set(repository.id, Date.now())
+    return true
   }
 
   // update the stored list of recently opened repositories
@@ -2105,7 +2133,8 @@ export class AppStore extends TypedBaseStore<IAppState> {
   // finish `_selectRepository`s refresh tasks
   private async _selectRepositoryRefreshTasks(
     repository: Repository,
-    previouslySelectedRepository: Repository | CloningRepository | null
+    previouslySelectedRepository: Repository | CloningRepository | null,
+    isRemoteRefreshDue: boolean
   ): Promise<Repository | null> {
     if (this.isRepositoryWarm(repository)) {
       this.updateMenuLabelsForSelectedRepository()
@@ -2114,12 +2143,14 @@ export class AppStore extends TypedBaseStore<IAppState> {
     }
 
     if (isRepositoryWithGitHubRepository(repository)) {
-      // Load issues from the upstream or fork depending
-      // on workflow preferences.
-      const ghRepo = getNonForkGitHubRepository(repository)
+      if (isRemoteRefreshDue) {
+        // Load issues from the upstream or fork depending
+        // on workflow preferences.
+        const ghRepo = getNonForkGitHubRepository(repository)
 
-      this._refreshIssues(ghRepo)
-      this.refreshMentionables(ghRepo)
+        this._refreshIssues(ghRepo)
+        this.refreshMentionables(ghRepo)
+      }
 
       this.pullRequestCoordinator.getAllPullRequests(repository).then(prs => {
         this.onPullRequestChanged(repository, prs)
@@ -2138,10 +2169,17 @@ export class AppStore extends TypedBaseStore<IAppState> {
     this.stopPullRequestUpdater()
     this.stopBackgroundPruner()
 
-    this.startBackgroundFetching(repository, !previouslySelectedRepository)
+    this.startBackgroundFetching(
+      repository,
+      !previouslySelectedRepository || !isRemoteRefreshDue
+    )
     this.startPullRequestUpdater(repository)
 
     this.startBackgroundPruner(repository)
+
+    if (!isRemoteRefreshDue) {
+      return repository
+    }
 
     this.addUpstreamRemoteIfNeeded(repository)
 

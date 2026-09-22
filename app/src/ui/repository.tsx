@@ -152,12 +152,14 @@ const enum Tab {
   History = 1,
 }
 
+/** The scroll positions of each repository, kept across tab switches */
+const scrollPositions = new Map<number, IRepositoryViewState>()
+
 export class RepositoryView extends React.Component<
   IRepositoryViewProps,
   IRepositoryViewState
 > {
-  private previousSection: RepositorySectionTab =
-    this.props.state.selectedSection
+  private previousSection: RepositorySectionTab | null = null
 
   // Flag to force the app to use the scroll position in the state the next time
   // the Compare list is rendered.
@@ -172,7 +174,7 @@ export class RepositoryView extends React.Component<
   public constructor(props: IRepositoryViewProps) {
     super(props)
 
-    this.state = {
+    this.state = scrollPositions.get(props.repository.id) ?? {
       changesListScrollTop: 0,
       compareListScrollTop: 0,
     }
@@ -189,17 +191,23 @@ export class RepositoryView extends React.Component<
   public scrollCompareListToTop(): void {
     this.forceCompareListScrollTop = true
 
-    this.setState({
-      compareListScrollTop: 0,
-    })
+    this.setScrollPositions({ compareListScrollTop: 0 })
   }
 
   private onChangesListScrolled = (scrollTop: number) => {
-    this.setState({ changesListScrollTop: scrollTop })
+    this.setScrollPositions({ changesListScrollTop: scrollTop })
   }
 
   private onCompareListScrolled = (scrollTop: number) => {
-    this.setState({ compareListScrollTop: scrollTop })
+    this.setScrollPositions({ compareListScrollTop: scrollTop })
+  }
+
+  private setScrollPositions(positions: Partial<IRepositoryViewState>) {
+    scrollPositions.set(this.props.repository.id, {
+      ...(scrollPositions.get(this.props.repository.id) ?? this.state),
+      ...positions,
+    })
+    this.setState(state => ({ ...state, ...positions }))
   }
 
   private renderChangesBadge(): JSX.Element | null {
@@ -267,7 +275,7 @@ export class RepositoryView extends React.Component<
     const availableWidth = clamp(this.props.sidebarWidth) - 1
 
     const scrollTop =
-      this.previousSection === RepositorySectionTab.History
+      this.previousSection !== RepositorySectionTab.Changes
         ? this.state.changesListScrollTop
         : undefined
     this.previousSection = RepositorySectionTab.Changes
@@ -341,7 +349,7 @@ export class RepositoryView extends React.Component<
     const currentBranch = tip.kind === TipState.Valid ? tip.branch : null
     const scrollTop =
       this.forceCompareListScrollTop ||
-      this.previousSection === RepositorySectionTab.Changes
+      this.previousSection !== RepositorySectionTab.History
         ? this.state.compareListScrollTop
         : undefined
     this.previousSection = RepositorySectionTab.History
