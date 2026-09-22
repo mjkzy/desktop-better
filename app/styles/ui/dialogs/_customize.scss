@@ -1,0 +1,59 @@
+@import '../../mixins';
+
+dialog#customize {
+  width: 460px;
+
+  .customize-description {
+    margin-top: 0;
+    color: var(--text-secondary-color);
+  }
+
+  .customize-color-option {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing);
+    padding: var(--spacing-half) 0;
+
+    input[type='color'] {
+      flex-shrink: 0;
+      width: 36px;
+      height: 28px;
+      padding: 0;
+      border: var(--base-border);
+      border-radius: var(--border-radius);
+      background: none;
+      cursor: pointer;
+    }
+
+    .customize-color-label {
+      display: flex;
+      flex-direction: column;
+      flex-grow: 1;
+      min-width: 0;
+
+      label {
+        font-weight: var(--font-weight-semibold);
+      }
+    }
+
+    .customize-color-description {
+      color: var(--text-secondary-color);
+      font-size: var(--font-size-sm);
+    }
+  }
+
+  .customize-theme-file {
+    display: flex;
+    gap: var(--spacing-half);
+    margin-top: var(--spacing);
+  }
+
+  .dialog-footer {
+    flex-direction: row;
+    align-items: center;
+
+    .reset-all-button {
+      margin-right: auto;
+    }
+  }
+}

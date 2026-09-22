@@ -69,6 +69,7 @@ import { IAPIRepoRuleset } from './api'
 import { ICustomIntegration } from './custom-integration'
 import { Emoji } from './emoji'
 import { IUpdateState } from '../ui/lib/update-store'
+import { IUICustomization } from '../models/ui-customization'
 
 export enum SelectionType {
   Repository,
@@ -319,6 +320,9 @@ export interface IAppState {
 
   /** The currently applied appearance (aka theme) */
   readonly currentTheme: ApplicableTheme
+
+  /** The user-selected colors that override the colors of the theme */
+  readonly uiCustomization: IUICustomization
 
   /** The selected tab size preference */
   readonly selectedTabSize: number

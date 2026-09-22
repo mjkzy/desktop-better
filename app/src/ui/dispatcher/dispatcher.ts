@@ -95,6 +95,7 @@ import { TipState, IValidBranch } from '../../models/tip'
 import { Banner, BannerType } from '../../models/banner'
 
 import { ApplicationTheme } from '../lib/application-theme'
+import { IUICustomization } from '../../models/ui-customization'
 import { installCLI } from '../lib/install-cli'
 import {
   executeMenuItem,
@@ -2677,6 +2678,13 @@ export class Dispatcher {
    */
   public setSelectedTheme(theme: ApplicationTheme) {
     return this.appStore._setSelectedTheme(theme)
+  }
+
+  /**
+   * Set the user-selected colors that override the colors of the theme
+   */
+  public setUICustomization(customization: IUICustomization) {
+    return this.appStore._setUICustomization(customization)
   }
 
   /**

@@ -122,6 +122,11 @@ import {
   getPersistedThemeName,
   setPersistedTheme,
 } from '../../ui/lib/application-theme'
+import { IUICustomization } from '../../models/ui-customization'
+import {
+  getPersistedUICustomization,
+  setPersistedUICustomization,
+} from '../ui-customization'
 import {
   getAppMenu,
   getCurrentWindowState,
@@ -699,6 +704,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
   private selectedBranchesTab = BranchesTab.Branches
   private selectedTheme = ApplicationTheme.System
   private currentTheme: ApplicableTheme = ApplicationTheme.Light
+  private uiCustomization: IUICustomization = getPersistedUICustomization()
   private selectedTabSize = tabSizeDefault
 
   private useWindowsOpenSSH: boolean = false
@@ -1329,6 +1335,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
       selectedBranchesTab: this.selectedBranchesTab,
       selectedTheme: this.selectedTheme,
       currentTheme: this.currentTheme,
+      uiCustomization: this.uiCustomization,
       selectedTabSize: this.selectedTabSize,
       apiRepositories: this.apiRepositoriesStore.getState(),
       useWindowsOpenSSH: this.useWindowsOpenSSH,
@@ -8816,6 +8823,17 @@ export class AppStore extends TypedBaseStore<IAppState> {
   public _setSelectedTheme(theme: ApplicationTheme) {
     setPersistedTheme(theme)
     this.selectedTheme = theme
+    this.emitUpdate()
+
+    return Promise.resolve()
+  }
+
+  /**
+   * Set the user-selected colors that override the colors of the theme
+   */
+  public _setUICustomization(customization: IUICustomization) {
+    setPersistedUICustomization(customization)
+    this.uiCustomization = customization
     this.emitUpdate()
 
     return Promise.resolve()

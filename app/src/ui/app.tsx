@@ -106,6 +106,9 @@ import { ReleaseNotes } from './release-notes'
 import { DeletePullRequest } from './delete-branch/delete-pull-request-dialog'
 import { CommitConflictsWarning } from './merge-conflicts'
 import { AppTheme } from './app-theme'
+import { AppUICustomization } from './app-ui-customization'
+import { CustomizeDialog } from './customize/customize-dialog'
+import { defaultUICustomization } from '../models/ui-customization'
 import { ApplicationTheme } from './lib/application-theme'
 import { RepositoryStateCache } from '../lib/stores/repository-state-cache'
 import { PopupType, Popup } from '../models/popup'
@@ -526,6 +529,8 @@ export class App extends React.Component<IAppProps, IAppState> {
         return this.showCloneRepo()
       case 'show-about':
         return this.showAbout()
+      case 'show-customize':
+        return this.props.dispatcher.showPopup({ type: PopupType.Customize })
       case 'go-to-commit-message':
         return this.goToCommitMessage()
       case 'open-pull-request':
@@ -1975,6 +1980,15 @@ export class App extends React.Component<IAppProps, IAppState> {
             onShowTermsAndConditions={this.showTermsAndConditions}
             updateState={this.state.updateState}
             onQuitAndInstall={this.onQuitAndInstall}
+          />
+        )
+      case PopupType.Customize:
+        return (
+          <CustomizeDialog
+            key="customize"
+            dispatcher={this.props.dispatcher}
+            customization={this.state.uiCustomization}
+            onDismissed={onPopupDismissedFn}
           />
         )
       case PopupType.PublishRepository:
@@ -4054,6 +4068,13 @@ export class App extends React.Component<IAppProps, IAppState> {
         style={{ tabSize: currentTabSize }}
       >
         <AppTheme theme={currentTheme} />
+        <AppUICustomization
+          customization={
+            this.state.showWelcomeFlow
+              ? defaultUICustomization
+              : this.state.uiCustomization
+          }
+        />
         {this.renderTitlebar()}
         {this.state.showWelcomeFlow
           ? this.renderWelcomeFlow()

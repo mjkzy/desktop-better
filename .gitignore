@@ -20,3 +20,8 @@ junit*.xml
 *.swp
 tslint-rules/
 playwright-videos/
+
+# better
+build.bat
+build_and_run.bat
+run.bat
