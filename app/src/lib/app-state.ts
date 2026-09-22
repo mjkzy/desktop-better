@@ -96,6 +96,9 @@ export interface IAppState {
    */
   readonly localRepositoryStateLookup: Map<number, ILocalRepositoryState>
 
+  /** The repositories that the user has open as tabs, in tab order */
+  readonly repositoryTabs: ReadonlyArray<IRepositoryTab>
+
   readonly selectedState: PossibleSelections | null
 
   /**
@@ -245,7 +248,6 @@ export interface IAppState {
 
   /** Should the app prompt the user to confirm they want to commit with changes are hidden by filter? */
   readonly askForConfirmationOnCommitFilteredChanges: boolean
-
 
   /** Should the app prompt the user to confirm worktree removal? */
   readonly askForConfirmationOnWorktreeRemoval: boolean
@@ -1125,4 +1127,12 @@ export interface IPullRequestState {
 
   /** The result of merging the pull request branch into the base branch */
   readonly mergeStatus: MergeTreeResult | null
+}
+
+/** A repository that the user has open as a tab */
+export interface IRepositoryTab {
+  readonly repository: Repository
+
+  /** The name of the checked out branch, or `null` if not known */
+  readonly branchName: string | null
 }

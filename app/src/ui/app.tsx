@@ -57,7 +57,6 @@ import {
   WorktreeDropdown,
   RevertProgress,
 } from './toolbar'
-import { iconForRepository, OcticonSymbol } from './octicons'
 import * as octicons from './octicons/octicons.generated'
 import {
   showCertificateTrustDialog,
@@ -101,6 +100,7 @@ import { CommitConflictsWarning } from './merge-conflicts'
 import { AppTheme } from './app-theme'
 import { AppUICustomization } from './app-ui-customization'
 import { ToastStack } from './toasts/toast-stack'
+import { RepositoryTabs } from './repository-tabs/repository-tabs'
 import { CustomizeDialog } from './customize/customize-dialog'
 import { defaultUICustomization } from '../models/ui-customization'
 import { ApplicationTheme } from './lib/application-theme'
@@ -168,7 +168,7 @@ import { DiscardChangesRetryDialog } from './discard-changes/discard-changes-ret
 import { PullRequestReview } from './notifications/pull-request-review'
 import { getRepositoryType } from '../lib/git'
 import { SSHUserPassword } from './ssh/ssh-user-password'
-import { showContextualMenu } from '../lib/menu-item'
+import { IMenuItem } from '../lib/menu-item'
 import { UnreachableCommitsDialog } from './history/unreachable-commits-dialog'
 import { OpenPullRequestDialog } from './open-pull-request/open-pull-request-dialog'
 import { sendNonFatalException } from '../lib/helpers/non-fatal-exception'
@@ -510,6 +510,12 @@ export class App extends React.Component<IAppProps, IAppState> {
         return this.showAbout()
       case 'show-customize':
         return this.props.dispatcher.showPopup({ type: PopupType.Customize })
+      case 'select-next-repository-tab':
+        return this.props.dispatcher.selectAdjacentRepositoryTab(1)
+      case 'select-previous-repository-tab':
+        return this.props.dispatcher.selectAdjacentRepositoryTab(-1)
+      case 'close-repository-tab':
+        return this.closeSelectedRepositoryTab()
       case 'go-to-commit-message':
         return this.goToCommitMessage()
       case 'open-pull-request':
@@ -3195,35 +3201,10 @@ export class App extends React.Component<IAppProps, IAppState> {
     }
   }
 
-  private renderRepositoryToolbarButton() {
-    const selection = this.state.selectedState
-
-    const repository = selection ? selection.repository : null
-
-    let icon: OcticonSymbol
-    let title: string
-    if (repository) {
-      const alias = repository instanceof Repository ? repository.alias : null
-      icon = iconForRepository(repository)
-      title = alias ?? repository.name
-    } else if (this.state.repositories.length > 0) {
-      icon = octicons.repo
-      title = __DARWIN__ ? 'Select a Repository' : 'Select a repository'
-    } else {
-      icon = octicons.repo
-      title = __DARWIN__ ? 'No Repositories' : 'No repositories'
-    }
-
-    const isOpen =
-      this.state.currentFoldout &&
-      this.state.currentFoldout.type === FoldoutType.Repository
-
-    const currentState: DropdownState = isOpen ? 'open' : 'closed'
-
-    const tooltip = repository && !isOpen ? repository.path : undefined
-
+  private renderRepositoryListButton() {
+    const hasTabs = this.state.repositoryTabs.length > 0
+    const isOpen = this.state.currentFoldout?.type === FoldoutType.Repository
     const foldoutWidth = clamp(this.state.sidebarWidth)
-
     const foldoutStyle: React.CSSProperties = {
       position: 'absolute',
       marginLeft: 0,
@@ -3232,34 +3213,40 @@ export class App extends React.Component<IAppProps, IAppState> {
       height: '100%',
       top: 0,
     }
+    const label = __DARWIN__
+      ? 'Open a Repository in a New Tab'
+      : 'Open a repository in a new tab'
 
-    /** The dropdown focus trap will stop focus event propagation we made need
-     * in some of our dialogs (noticed with Lists). Disabled this when dialogs
-     * are open */
+    // The focus trap of the dropdown stops the focus events that the lists in
+    // some dialogs need.
     const enableFocusTrap = this.state.currentPopup === null
 
     return (
       <ToolbarDropdown
-        icon={icon}
-        title={title}
-        description={__DARWIN__ ? 'Current Repository' : 'Current repository'}
-        tooltip={tooltip}
+        className="repository-list-button"
+        icon={hasTabs ? octicons.plus : octicons.repo}
+        title={
+          hasTabs
+            ? undefined
+            : __DARWIN__
+            ? 'Select a Repository'
+            : 'Select a repository'
+        }
+        tooltip={isOpen ? undefined : label}
+        ariaLabel={label}
+        showDisclosureArrow={false}
         foldoutStyle={foldoutStyle}
-        onContextMenu={this.onRepositoryToolbarButtonContextMenu}
         onDropdownStateChanged={this.onRepositoryDropdownStateChanged}
         dropdownContentRenderer={this.renderRepositoryList}
-        dropdownState={currentState}
+        dropdownState={isOpen ? 'open' : 'closed'}
         enableFocusTrap={enableFocusTrap}
       />
     )
   }
 
-  private onRepositoryToolbarButtonContextMenu = () => {
-    const repository = this.state.selectedState?.repository
-    if (repository === undefined) {
-      return
-    }
-
+  private getRepositoryContextMenuItems = (
+    repository: Repository
+  ): ReadonlyArray<IMenuItem> => {
     const onChangeRepositoryAlias = (repository: Repository) => {
       this.props.dispatcher.showPopup({
         type: PopupType.ChangeRepositoryAlias,
@@ -3282,7 +3269,7 @@ export class App extends React.Component<IAppProps, IAppState> {
       this.showWorktrees()
     }
 
-    const items = generateRepositoryListContextMenu({
+    return generateRepositoryListContextMenu({
       onRemoveRepository: this.removeRepository,
       onShowRepository: this.showRepository,
       onOpenInShell: this.openInShell,
@@ -3300,8 +3287,6 @@ export class App extends React.Component<IAppProps, IAppState> {
         ? undefined
         : this.state.selectedShell,
     })
-
-    showContextualMenu(items)
   }
 
   private renderPushPullToolbarButton() {
@@ -3622,18 +3607,55 @@ export class App extends React.Component<IAppProps, IAppState> {
       return null
     }
 
-    const width = clamp(this.state.sidebarWidth)
-
     return (
       <Toolbar id="desktop-app-toolbar">
-        <div className="sidebar-section" style={{ width }}>
-          {this.renderRepositoryToolbarButton()}
-        </div>
+        {this.renderRepositoryTabs()}
         {this.renderWorktreeToolbarButton()}
         {this.renderBranchToolbarButton()}
         {this.renderPushPullToolbarButton()}
       </Toolbar>
     )
+  }
+
+  private renderRepositoryTabs() {
+    const { repositoryTabs, selectedState } = this.state
+
+    const selectedRepository = selectedState?.repository
+    const selectedRepositoryId =
+      selectedRepository instanceof Repository ? selectedRepository.id : null
+
+    return (
+      <RepositoryTabs
+        tabs={repositoryTabs}
+        selectedRepositoryId={selectedRepositoryId}
+        localRepositoryStateLookup={this.state.localRepositoryStateLookup}
+        onSelect={this.onSelectRepositoryTab}
+        onClose={this.onCloseRepositoryTabs}
+        onMove={this.onMoveRepositoryTab}
+        getRepositoryMenuItems={this.getRepositoryContextMenuItems}
+      >
+        {this.renderRepositoryListButton()}
+      </RepositoryTabs>
+    )
+  }
+
+  private onSelectRepositoryTab = (repository: Repository) => {
+    this.props.dispatcher.selectRepository(repository)
+  }
+
+  private onCloseRepositoryTabs = (repositories: ReadonlyArray<Repository>) => {
+    this.props.dispatcher.closeRepositoryTabs(repositories)
+  }
+
+  private onMoveRepositoryTab = (repository: Repository, toIndex: number) => {
+    this.props.dispatcher.moveRepositoryTab(repository, toIndex)
+  }
+
+  private closeSelectedRepositoryTab() {
+    const repository = this.getRepository()
+    return repository instanceof Repository
+      ? this.props.dispatcher.closeRepositoryTabs([repository])
+      : Promise.resolve()
   }
 
   private renderRepository() {

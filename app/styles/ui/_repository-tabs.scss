@@ -1,0 +1,200 @@
+@import '../mixins';
+
+// The open repository tabs take only the space that they need, so that the
+// worktree, branch and push buttons stay next to them.
+.repository-tabs {
+  display: flex;
+  flex-direction: row;
+  flex: 0 1 auto;
+  min-width: 0;
+  height: 100%;
+  border-right: 1px solid var(--toolbar-button-border-color);
+
+  .repository-tabs-list {
+    display: flex;
+    flex-direction: row;
+    min-width: 0;
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+
+    &::-webkit-scrollbar {
+      height: 3px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background-color: transparent;
+    }
+
+    &:hover::-webkit-scrollbar-thumb {
+      background-color: var(--toolbar-button-hover-background-color);
+    }
+  }
+
+  .repository-tab {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    gap: var(--spacing);
+    min-width: 120px;
+    max-width: 260px;
+    height: 100%;
+    padding: 0 6px 0 12px;
+
+    border-right: 1px solid var(--toolbar-button-border-color);
+    color: var(--toolbar-text-secondary-color);
+    cursor: default;
+    user-select: none;
+
+    &:hover {
+      background-color: var(--toolbar-button-hover-background-color);
+      color: var(--toolbar-button-hover-color);
+    }
+
+    &:focus-visible {
+      outline: 1px solid var(--focus-color);
+      outline-offset: -1px;
+    }
+
+    &.selected {
+      background-color: var(--background-color);
+      color: var(--text-color);
+      box-shadow: inset 0 2px 0 var(--accent-color);
+
+      .repository-tab-branch {
+        color: var(--text-secondary-color);
+      }
+    }
+
+    &.dragging {
+      opacity: 0.5;
+    }
+
+    .repository-tab-icon {
+      flex-shrink: 0;
+    }
+
+    .repository-tab-label {
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 auto;
+      gap: 2px;
+      min-width: 0;
+      line-height: 1.2;
+    }
+
+    .repository-tab-name {
+      @include ellipsis;
+      font-weight: var(--font-weight-semibold);
+    }
+
+    .repository-tab-branch {
+      @include ellipsis;
+      font-size: var(--font-size-sm);
+      color: var(--toolbar-text-secondary-color);
+    }
+
+    // As in VS Code, the close button shows a dot for a tab with uncommitted
+    // changes, and changes to a cross on hover.
+    .repository-tab-close {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      border: none;
+      border-radius: var(--border-radius);
+      background: transparent;
+      color: inherit;
+
+      .octicon {
+        width: 14px;
+        height: 14px;
+      }
+
+      .dirty {
+        width: 10px;
+        height: 10px;
+      }
+
+      .close {
+        visibility: hidden;
+      }
+    }
+
+    &.has-changes .repository-tab-close .close {
+      display: none;
+    }
+
+    button.repository-tab-close:hover {
+      background-color: rgba(128, 128, 128, 0.25);
+    }
+
+    &:hover,
+    &.selected {
+      .repository-tab-close .close {
+        visibility: visible;
+      }
+    }
+
+    &.has-changes:hover {
+      button.repository-tab-close .dirty {
+        display: none;
+      }
+
+      button.repository-tab-close .close {
+        display: block;
+      }
+    }
+  }
+
+  // A compact button after the last tab. As a resizable toolbar dropdown it
+  // otherwise grows to fill the free space.
+  .repository-list-button {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 8px var(--spacing);
+
+    & > .toolbar-button > button {
+      justify-content: center;
+      min-width: 36px;
+      padding: 0 var(--spacing-half);
+      border: none;
+      border-radius: var(--border-radius);
+      background-color: var(--color-new);
+      color: #fff;
+
+      &:hover,
+      &:focus-visible {
+        background-color: var(--color-new);
+        color: #fff;
+        filter: brightness(1.12);
+      }
+
+      .icon {
+        width: 16px;
+        height: 16px;
+        margin-right: 0;
+      }
+
+      .text {
+        flex: 0 0 auto;
+        margin-right: 0;
+        white-space: nowrap;
+      }
+
+      .title {
+        font-weight: var(--font-weight-semibold);
+      }
+    }
+
+    &.open > .toolbar-button > button {
+      background-color: var(--color-new);
+      color: #fff;
+      filter: brightness(0.9);
+    }
+  }
+}

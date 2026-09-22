@@ -127,6 +127,9 @@ const allMenuIds: ReadonlyArray<MenuIDs> = [
   'show-changes',
   'show-history',
   'show-repository-list',
+  'select-next-repository-tab',
+  'select-previous-repository-tab',
+  'close-repository-tab',
   'show-branches-list',
   'open-working-directory',
   'show-repository-settings',
@@ -253,6 +256,9 @@ function getRepositoryMenuBuilder(state: IAppState): MenuStateBuilder {
     'compare-to-branch',
     'toggle-changes-filter',
     'create-worktree',
+    'select-next-repository-tab',
+    'select-previous-repository-tab',
+    'close-repository-tab',
   ]
 
   const menuStateBuilder = new MenuStateBuilder()

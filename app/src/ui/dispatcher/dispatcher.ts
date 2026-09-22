@@ -295,6 +295,21 @@ export class Dispatcher {
     return this.appStore._selectRepository(repository)
   }
 
+  /** Close the tabs of the repositories. The last open tab stays open. */
+  public closeRepositoryTabs(repositories: ReadonlyArray<Repository>) {
+    return this.appStore._closeRepositoryTabs(repositories)
+  }
+
+  /** Select the next (1) or the previous (-1) repository tab */
+  public selectAdjacentRepositoryTab(direction: 1 | -1) {
+    return this.appStore._selectAdjacentRepositoryTab(direction)
+  }
+
+  /** Move the repository tab to the index in the tab order */
+  public moveRepositoryTab(repository: Repository, toIndex: number) {
+    return this.appStore._moveRepositoryTab(repository, toIndex)
+  }
+
   /** Change the selected section in the repository. */
   public changeRepositorySection(
     repository: Repository,

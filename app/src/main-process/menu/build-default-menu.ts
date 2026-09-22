@@ -212,6 +212,28 @@ export function buildDefaultMenuTemplate({
       },
       separator,
       {
+        label: __DARWIN__ ? 'Next Repository Tab' : 'Ne&xt repository tab',
+        id: 'select-next-repository-tab',
+        accelerator: __DARWIN__ ? 'Cmd+Shift+]' : 'Ctrl+PageDown',
+        click: emit('select-next-repository-tab'),
+      },
+      {
+        label: __DARWIN__
+          ? 'Previous Repository Tab'
+          : 'Pre&vious repository tab',
+        id: 'select-previous-repository-tab',
+        accelerator: __DARWIN__ ? 'Cmd+Shift+[' : 'Ctrl+PageUp',
+        click: emit('select-previous-repository-tab'),
+      },
+      {
+        label: __DARWIN__ ? 'Close Repository Tab' : 'Cl&ose repository tab',
+        id: 'close-repository-tab',
+        // On macOS, Cmd+W closes the window.
+        accelerator: __DARWIN__ ? undefined : 'Ctrl+W',
+        click: emit('close-repository-tab'),
+      },
+      separator,
+      {
         label: __DARWIN__ ? 'Go to Summary' : 'Go to &Summary',
         id: 'go-to-commit-message',
         accelerator: 'CmdOrCtrl+G',

@@ -49,6 +49,9 @@ export type MenuEvent =
   | 'increase-active-resizable-width'
   | 'toggle-changes-filter'
   | 'show-customize'
+  | 'select-next-repository-tab'
+  | 'select-previous-repository-tab'
+  | 'close-repository-tab'
   | TestMenuEvent
 
 /**

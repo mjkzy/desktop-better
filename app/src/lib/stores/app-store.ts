@@ -131,6 +131,7 @@ import {
   RepositorySectionTab,
   SelectionType,
   IRepositoryState,
+  IRepositoryTab,
   ChangesSelectionKind,
   ChangesWorkingDirectorySelection,
   isRebaseConflictState,
@@ -378,10 +379,31 @@ import { updateStore } from '../../ui/lib/update-store'
 import { BypassReasonType } from '../../ui/secret-scanning/bypass-push-protection-dialog'
 import { WorktreeEntry } from '../../models/worktree'
 import { shouldShowWorktreeDropdown } from '../worktree-dropdown'
+import {
+  getAdjacentRepositoryTab,
+  getTabToSelectAfterClose,
+  openRepositoryTab,
+  replaceRepositoryTab,
+} from '../repository-tabs'
 
 const LastSelectedRepositoryIDKey = 'last-selected-repository-id'
 
 const RecentRepositoriesKey = 'recently-selected-repositories'
+
+const OpenRepositoryTabsKey = 'open-repository-tabs'
+
+/**
+ * A tab switch skips the full refresh when the watcher saw no change since
+ * the last refresh. This limit protects against a watcher that stopped
+ * without notice.
+ */
+const warmRepositoryMaxAgeMs = 10 * 60 * 1000
+
+/** The minimum interval between two status loads for a background tab */
+const backgroundTabStatusDelayMs = 10 * 1000
+
+/** Wait this long after startup before the app loads the background tabs */
+const prewarmRepositoryTabsDelayMs = 5 * 1000
 /**
  *  maximum number of repositories shown in the "Recent" repositories group
  *  in the repository switcher dropdown
@@ -536,7 +558,14 @@ export class AppStore extends TypedBaseStore<IAppState> {
   private currentBackgroundFetcher: BackgroundFetcher | null = null
 
   private currentBranchPruner: BranchPruner | null = null
-  private repositoryWatcher: RepositoryWatcher | null = null
+  private openRepositoryTabs: ReadonlyArray<number> = []
+  private readonly repositoryWatchers = new Map<
+    number,
+    { readonly path: string; readonly watcher: RepositoryWatcher }
+  >()
+  private readonly staleRepositoryIds = new Set<number>()
+  private readonly lastRefreshTimes = new Map<number, number>()
+  private readonly backgroundTabStatusTimers = new Map<number, number>()
   private toasts: ReadonlyArray<IToast> = []
   private readonly toastTimers = new Map<string, number>()
   private readonly networkToastOperations = new Map<
@@ -986,6 +1015,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
     this.repositoriesStore.onDidUpdate(updateRepositories => {
       this.repositories = updateRepositories
       this.updateRepositorySelectionAfterRepositoriesChanged()
+      this.pruneRepositoryTabs()
       this.emitUpdate()
     })
 
@@ -1109,6 +1139,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
       repositories,
       recentRepositories: this.recentRepositories,
       localRepositoryStateLookup: this.localRepositoryStateLookup,
+      repositoryTabs: this.getRepositoryTabs(),
       windowState: this.windowState,
       windowZoomFactor: this.windowZoomFactor,
       appIsFocused: this.appIsFocused,
@@ -1975,7 +2006,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
     this.stopPullRequestUpdater()
     this._clearBanner()
     this.stopBackgroundPruner()
-    this.stopRepositoryWatcher()
+    this.syncRepositoryWatchers()
 
     if (repository == null) {
       return Promise.resolve(null)
@@ -1986,6 +2017,9 @@ export class AppStore extends TypedBaseStore<IAppState> {
     }
 
     setNumber(LastSelectedRepositoryIDKey, repository.id)
+    this.setOpenRepositoryTabs(
+      openRepositoryTab(this.openRepositoryTabs, repository.id)
+    )
 
     const previousRepositoryId = previouslySelectedRepository
       ? previouslySelectedRepository.id
@@ -2010,8 +2044,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
     this.notificationsStore.selectRepository(repository)
 
-    this.stopRepositoryWatcher()
-    this.startRepositoryWatcher(refreshedRepository)
+    this.syncRepositoryWatchers()
 
     return this._selectRepositoryRefreshTasks(
       refreshedRepository,
@@ -2054,7 +2087,11 @@ export class AppStore extends TypedBaseStore<IAppState> {
     repository: Repository,
     previouslySelectedRepository: Repository | CloningRepository | null
   ): Promise<Repository | null> {
-    this._refreshRepository(repository)
+    if (this.isRepositoryWarm(repository)) {
+      this.updateMenuLabelsForSelectedRepository()
+    } else {
+      this._refreshRepository(repository)
+    }
 
     if (isRepositoryWithGitHubRepository(repository)) {
       // Load issues from the upstream or fork depending
@@ -2139,12 +2176,97 @@ export class AppStore extends TypedBaseStore<IAppState> {
       changes => this.onRepositoryWatchChanges(repository.id, changes)
     )
     watcher.start()
-    this.repositoryWatcher = watcher
+    return watcher
   }
 
-  private stopRepositoryWatcher() {
-    this.repositoryWatcher?.stop()
-    this.repositoryWatcher = null
+  /** Watch the selected repository and each repository in a tab */
+  private syncRepositoryWatchers() {
+    const selected =
+      this.selectedRepository instanceof Repository
+        ? this.selectedRepository
+        : null
+
+    const watched = new Map<number, Repository>()
+    for (const repository of this.repositories) {
+      if (this.openRepositoryTabs.includes(repository.id)) {
+        watched.set(repository.id, repository)
+      }
+    }
+    if (selected !== null) {
+      watched.set(selected.id, selected)
+    }
+
+    for (const [id, entry] of this.repositoryWatchers) {
+      const repository = watched.get(id)
+      if (
+        repository === undefined ||
+        repository.missing ||
+        repository.path !== entry.path
+      ) {
+        entry.watcher.stop()
+        this.repositoryWatchers.delete(id)
+        this.lastRefreshTimes.delete(id)
+      }
+    }
+
+    for (const [id, repository] of watched) {
+      if (!repository.missing && !this.repositoryWatchers.has(id)) {
+        this.repositoryWatchers.set(id, {
+          path: repository.path,
+          watcher: this.startRepositoryWatcher(repository),
+        })
+      }
+    }
+  }
+
+  /**
+   * Check if the cached state of the repository is still current, so that a
+   * switch to it does not need a full refresh.
+   */
+  private isRepositoryWarm(repository: Repository) {
+    const lastRefresh = this.lastRefreshTimes.get(repository.id)
+
+    return (
+      lastRefresh !== undefined &&
+      Date.now() - lastRefresh < warmRepositoryMaxAgeMs &&
+      !this.staleRepositoryIds.has(repository.id) &&
+      this.repositoryWatchers.has(repository.id) &&
+      !repository.isTutorialRepository
+    )
+  }
+
+  private onBackgroundRepositoryWatchChanges(
+    repositoryId: number,
+    changes: IRepositoryWatchChanges
+  ) {
+    // A status load rewrites the index, which would mark the tab stale again.
+    if (!changes.workingDirectory && !changes.refs) {
+      return
+    }
+
+    this.staleRepositoryIds.add(repositoryId)
+
+    if (this.backgroundTabStatusTimers.has(repositoryId)) {
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      this.backgroundTabStatusTimers.delete(repositoryId)
+      const repository = this.repositories.find(r => r.id === repositoryId)
+      if (
+        repository !== undefined &&
+        this.repositoryWatchers.has(repositoryId)
+      ) {
+        this.refreshBackgroundTabStatus(repository)
+      }
+    }, backgroundTabStatusDelayMs)
+    this.backgroundTabStatusTimers.set(repositoryId, timer)
+  }
+
+  private async refreshBackgroundTabStatus(repository: Repository) {
+    const status = await this.gitStoreCache.get(repository).loadStatus()
+    this.updateSidebarIndicator(repository, status)
+    this.emitUpdate()
   }
 
   private async onRepositoryWatchChanges(
@@ -2153,6 +2275,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
   ) {
     const repository = this.selectedRepository
     if (!(repository instanceof Repository) || repository.id !== repositoryId) {
+      this.onBackgroundRepositoryWatchChanges(repositoryId, changes)
       return
     }
 
@@ -2335,6 +2458,136 @@ export class AppStore extends TypedBaseStore<IAppState> {
     return Promise.resolve()
   }
 
+  private setOpenRepositoryTabs(tabs: ReadonlyArray<number>) {
+    if (tabs === this.openRepositoryTabs) {
+      return
+    }
+
+    this.openRepositoryTabs = tabs
+    setNumberArray(OpenRepositoryTabsKey, tabs)
+    this.syncRepositoryWatchers()
+    this.emitUpdate()
+  }
+
+  private pruneRepositoryTabs() {
+    const tabs = this.openRepositoryTabs.filter(id =>
+      this.repositories.some(r => r.id === id)
+    )
+
+    if (tabs.length === this.openRepositoryTabs.length) {
+      this.syncRepositoryWatchers()
+    } else {
+      this.setOpenRepositoryTabs(tabs)
+    }
+  }
+
+  private getRepositoryTabs(): ReadonlyArray<IRepositoryTab> {
+    const tabs = new Array<IRepositoryTab>()
+
+    for (const id of this.openRepositoryTabs) {
+      const repository = this.repositories.find(r => r.id === id)
+      if (repository !== undefined) {
+        const { tip } = this.repositoryStateCache.get(repository).branchesState
+        const branchName = tip.kind === TipState.Valid ? tip.branch.name : null
+        tabs.push({ repository, branchName })
+      }
+    }
+
+    return tabs
+  }
+
+  /**
+   * Load the state of each background tab one after the other, so that the
+   * first switch to a tab does not wait for Git.
+   */
+  private async prewarmRepositoryTabs() {
+    for (const id of this.openRepositoryTabs) {
+      const repository = this.repositories.find(r => r.id === id)
+
+      if (
+        repository === undefined ||
+        repository.missing ||
+        id === this.getSelectedRepositoryId() ||
+        !this.openRepositoryTabs.includes(id) ||
+        this.isRepositoryWarm(repository)
+      ) {
+        continue
+      }
+
+      await this._refreshRepository(repository).catch(e =>
+        log.warn(`Unable to load the tab for '${repository.name}'`, e)
+      )
+    }
+  }
+
+  private findRepositoryById(repositoryId: number | null) {
+    return this.repositories.find(r => r.id === repositoryId) ?? null
+  }
+
+  private getSelectedRepositoryId() {
+    return this.selectedRepository instanceof Repository
+      ? this.selectedRepository.id
+      : null
+  }
+
+  /** This shouldn't be called directly. See `Dispatcher`. */
+  public async _closeRepositoryTabs(
+    repositoriesToClose: ReadonlyArray<Repository>
+  ): Promise<void> {
+    const idsToClose = new Set(repositoriesToClose.map(r => r.id))
+    const tabs = this.openRepositoryTabs.filter(id => !idsToClose.has(id))
+
+    if (tabs.length === 0) {
+      return
+    }
+
+    const selectedId = this.getSelectedRepositoryId()
+    const nextTab =
+      selectedId !== null && idsToClose.has(selectedId)
+        ? this.findRepositoryById(
+            getTabToSelectAfterClose(
+              this.openRepositoryTabs.filter(
+                id => id === selectedId || !idsToClose.has(id)
+              ),
+              selectedId
+            )
+          )
+        : null
+
+    this.setOpenRepositoryTabs(tabs)
+
+    if (nextTab !== null) {
+      await this._selectRepository(nextTab)
+    }
+  }
+
+  /** This shouldn't be called directly. See `Dispatcher`. */
+  public async _selectAdjacentRepositoryTab(direction: 1 | -1): Promise<void> {
+    const selectedId = this.getSelectedRepositoryId()
+    const repository = this.findRepositoryById(
+      getAdjacentRepositoryTab(this.openRepositoryTabs, selectedId, direction)
+    )
+
+    if (repository !== null && repository.id !== selectedId) {
+      await this._selectRepository(repository)
+    }
+  }
+
+  /** This shouldn't be called directly. See `Dispatcher`. */
+  public _moveRepositoryTab(
+    repository: Repository,
+    toIndex: number
+  ): Promise<void> {
+    const tabs = this.openRepositoryTabs.filter(id => id !== repository.id)
+    const index = Math.max(0, Math.min(toIndex, tabs.length))
+    this.setOpenRepositoryTabs([
+      ...tabs.slice(0, index),
+      repository.id,
+      ...tabs.slice(index),
+    ])
+    return Promise.resolve()
+  }
+
   private stopBackgroundFetching() {
     const backgroundFetcher = this.currentBackgroundFetcher
     if (backgroundFetcher) {
@@ -2467,6 +2720,12 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
     this.accounts = accounts
     this.repositories = repositories
+    this.openRepositoryTabs = getNumberArray(OpenRepositoryTabsKey)
+    this.pruneRepositoryTabs()
+    window.setTimeout(
+      () => this.prewarmRepositoryTabs(),
+      prewarmRepositoryTabsDelayMs
+    )
     this.alwaysShowWorktreeList = getBoolean(alwaysShowWorktreeListKey, false)
 
     this.updateRepositorySelectionAfterRepositoriesChanged()
@@ -2938,6 +3197,22 @@ export class AppStore extends TypedBaseStore<IAppState> {
         ) || null
 
       newSelectedRepository = r
+    }
+
+    if (
+      newSelectedRepository === null &&
+      selectedRepository instanceof Repository
+    ) {
+      const nextTabId = getTabToSelectAfterClose(
+        this.openRepositoryTabs.filter(
+          id =>
+            id === selectedRepository.id ||
+            this.repositories.some(r => r.id === id)
+        ),
+        selectedRepository.id
+      )
+      newSelectedRepository =
+        this.repositories.find(r => r.id === nextTabId) ?? null
     }
 
     if (newSelectedRepository === null && this.repositories.length > 0) {
@@ -3970,6 +4245,14 @@ export class AppStore extends TypedBaseStore<IAppState> {
       type.topLevelWorkingDirectory
     )
 
+    this.setOpenRepositoryTabs(
+      replaceRepositoryTab(
+        this.openRepositoryTabs,
+        repository.id,
+        result.repository.id
+      )
+    )
+
     if (!result.existingRepository) {
       // The main worktree exists, so its own worktree list is readable even
       // when the metadata belonging to the removed worktree isn't.
@@ -4032,6 +4315,8 @@ export class AppStore extends TypedBaseStore<IAppState> {
       }
     }
 
+    this.staleRepositoryIds.delete(repository.id)
+
     const state = this.repositoryStateCache.get(repository)
     const gitStore = this.gitStoreCache.get(repository)
 
@@ -4082,12 +4367,17 @@ export class AppStore extends TypedBaseStore<IAppState> {
     )
     this.updateCurrentPullRequest(repository)
 
-    const latestState = this.repositoryStateCache.get(repository)
-    this.updateMenuItemLabels(latestState)
-
     this._initializeCompare(repository)
 
-    this.updateCurrentTutorialStep(repository)
+    if (
+      this.selectedRepository instanceof Repository &&
+      this.selectedRepository.id === repository.id
+    ) {
+      this.updateMenuItemLabels(this.repositoryStateCache.get(repository))
+      this.updateCurrentTutorialStep(repository)
+    }
+
+    this.lastRefreshTimes.set(repository.id, Date.now())
   }
 
   private async updateStashEntryCountMetric(
@@ -6027,6 +6317,13 @@ export class AppStore extends TypedBaseStore<IAppState> {
       worktree
     )
 
+    this.setOpenRepositoryTabs(
+      replaceRepositoryTab(
+        this.openRepositoryTabs,
+        repository.id,
+        result.repository.id
+      )
+    )
     await this._selectRepository(result.repository)
 
     this.statsStore.increment('worktreeSwitchCount')
@@ -6120,6 +6417,13 @@ export class AppStore extends TypedBaseStore<IAppState> {
       // message) just because the worktree was renamed.
       this.repositoryStateCache.transferState(repository, result.repository)
 
+      this.setOpenRepositoryTabs(
+        replaceRepositoryTab(
+          this.openRepositoryTabs,
+          repository.id,
+          result.repository.id
+        )
+      )
       await this._selectRepository(result.repository)
       await this._refreshWorktrees(result.repository)
     } else {
